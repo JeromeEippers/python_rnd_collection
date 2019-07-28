@@ -1,4 +1,4 @@
-#RBF Solver
+# RBF Solver
 
 This is an rbf solver implemented in pure python without any libraries.
 It can blend 3d centers and 3d values.
@@ -15,3 +15,5 @@ And the kernel can be:
 ### test
 RbfSolver_populate_scene_test can be used to create a test scene in maya.
 
+### status
+implemented in maya 2018.
