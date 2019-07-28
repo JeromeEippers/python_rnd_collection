@@ -13,7 +13,11 @@ And the kernel can be:
 * ThinPlate
 
 ### test
+
 RbfSolver_populate_scene_test can be used to create a test scene in maya.
 
 ### status
-implemented in maya 2018.
+
+The logic of the implementation can be found in the Math notebook called "rbf".
+
+Implemented in maya 2018.
