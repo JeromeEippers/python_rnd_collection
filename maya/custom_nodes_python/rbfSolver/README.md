@@ -5,7 +5,7 @@ It can blend 3d centers and 3d values.
 
 This version just do pure vector interpolation, whitout any clamp or renormalizing
 
-![screenshot](https://github.com/JeromeEippers/python_rnd_collection/blob/master/maya/custom_nodes_python/rbfsolver.png)
+![screenshot](https://github.com/JeromeEippers/python_rnd_collection/blob/master/maya/custom_nodes_python/rbfSolver/rbfsolver.png)
 
 
 
