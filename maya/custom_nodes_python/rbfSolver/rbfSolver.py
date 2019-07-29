@@ -1,7 +1,7 @@
 import math, sys
 import maya.OpenMaya as OpenMaya
 import maya.OpenMayaMPx as OpenMayaMPx
-kPluginNodeTypeName = "jeRBFSolver"
+kPluginNodeTypeName = "RBFSolver"
 rbfNodeId = OpenMaya.MTypeId(0x8800)
 
 
@@ -118,9 +118,7 @@ def normDist(va, vb):
     return vLength(vSub(va,vb))
 
 def dotDist(va, vb):
-    d = vDot(vNormalize(va), vNormalize(vb))
-    if d < 0:
-        d = 1.0 - d
+    d = 1.0 - vDot(vNormalize(va), vNormalize(vb))
     return d
 
 class RBF (object):
