@@ -12,3 +12,5 @@ Let's try to keep it somewhat organised
 (write here all the interesting stuff to do)
 
 * read http://alumni.media.mit.edu/~aries/papers/johnson_phd.pdf (quaternion, limit, blend, rbf, ...)
+* http://taichi.graphics/ library with a lot of simulation paper implemented.
+
