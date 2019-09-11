@@ -33,10 +33,10 @@ class CapsuleLinkNode(OpenMaya.MPxNode):
 
         if ( plug == CapsuleLinkNode.outputA or plug == CapsuleLinkNode.outputB ):
             
-            inputCapsuleA = h.inputCapsule(CapsuleLinkNode, 'inputCapsuleA', dataBlock)
-            inputCapsuleB = h.inputCapsule(CapsuleLinkNode, 'inputCapsuleB', dataBlock)
-            outputCapsuleA = h.inputCapsule(CapsuleLinkNode, 'outputCapsuleA', dataBlock, inputCapsuleA.pq.copy())
-            outputCapsuleB = h.inputCapsule(CapsuleLinkNode, 'outputCapsuleB', dataBlock, inputCapsuleB.pq.copy())
+            inputCapsuleA = h.get_capsule_datablock(CapsuleLinkNode, 'inputCapsuleA', dataBlock)
+            inputCapsuleB = h.get_capsule_datablock(CapsuleLinkNode, 'inputCapsuleB', dataBlock)
+            outputCapsuleA = h.get_capsule_datablock(CapsuleLinkNode, 'outputCapsuleA', dataBlock, inputCapsuleA.pq.copy())
+            outputCapsuleB = h.get_capsule_datablock(CapsuleLinkNode, 'outputCapsuleB', dataBlock, inputCapsuleB.pq.copy())
 
             link = CapsuleLink.gather(inputCapsuleA, inputCapsuleB)
 

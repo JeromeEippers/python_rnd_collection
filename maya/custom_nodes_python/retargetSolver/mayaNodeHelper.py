@@ -1,7 +1,7 @@
 
 import maya.api.OpenMaya as OpenMaya
 import mtypes as t
-
+from mayamatrix import mayaToMatrix, matrixToMaya
 
 
 def create_capsule_compound(classtype, name):
