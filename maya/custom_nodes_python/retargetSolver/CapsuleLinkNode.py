@@ -4,12 +4,67 @@ import maya.api.OpenMaya as OpenMaya
 import mtypes as t
 from CapsuleLink import CapsuleLink
 from mayamatrix import mayaToMatrix, matrixToMaya
-import mayaNodeHelper as h 
 
 maya_useNewAPI = True 
 kPluginNodeTypeName = "CapsuleLinkNode"
 pluginNodeId = OpenMaya.MTypeId(0x8801)
 
+
+def create_capsule_compound(classtype, name):
+    mComp = OpenMaya.MFnCompoundAttribute()
+    compound = mComp.create(name, name)
+    setattr(classtype, name, compound)
+    mComp.array = False
+    mComp.storable = True
+    mComp.writable = True
+
+    mAttr = OpenMaya.MFnMatrixAttribute()
+    matrix = mAttr.create( name + "Matrix", name + "Matrix" )
+    setattr(classtype, name + "Matrix", matrix)
+    mAttr.array = False
+    mAttr.storable = True
+    mAttr.writable = True
+
+    nAttr = OpenMaya.MFnNumericAttribute()
+    radius = nAttr.create( name + "Radius", name + "Radius", OpenMaya.MFnNumericData.kDouble, 0.5 )
+    setattr(classtype, name + "Radius", radius)
+    nAttr.array = False
+    nAttr.storable = True
+    nAttr.writable = True
+
+    nAttr = OpenMaya.MFnNumericAttribute()
+    height = nAttr.create( name + "Height", name + "Height", OpenMaya.MFnNumericData.kDouble, 1.0 )
+    setattr(classtype, name + "Height", height)
+    nAttr.array = False
+    nAttr.storable = True
+    nAttr.writable = True
+
+    classtype.addAttribute(matrix)
+    classtype.addAttribute(radius)
+    classtype.addAttribute(height)
+
+    mComp.addChild(matrix)
+    mComp.addChild(radius)
+    mComp.addChild(height)
+
+    classtype.addAttribute(compound)
+
+    return compound
+
+
+
+def get_capsule_datablock(classtype, name, dataBlock, pq=None):
+    if pq == None:
+        matrix = mayaToMatrix(dataBlock.inputValue( getattr(classtype, name+"Matrix" )).asMatrix())
+        pq = t.PosQuat.fromMatrix(matrix)
+    radius = dataBlock.inputValue( getattr(classtype, name+"Radius" )).asDouble()
+    height = dataBlock.inputValue( getattr(classtype, name+"Height" )).asDouble()
+
+    return t.Capsule(
+        pq,
+        radius,
+        height
+    )
 
 
 # Node definition
@@ -31,22 +86,24 @@ class CapsuleLinkNode(OpenMaya.MPxNode):
 
     def compute(self, plug, dataBlock):
 
-        if ( plug == CapsuleLinkNode.outputA or plug == CapsuleLinkNode.outputB ):
+        cls = self.__class__
+
+        if ( plug == cls.outputA or plug == cls.outputB ):
             
-            inputCapsuleA = h.get_capsule_datablock(CapsuleLinkNode, 'inputCapsuleA', dataBlock)
-            inputCapsuleB = h.get_capsule_datablock(CapsuleLinkNode, 'inputCapsuleB', dataBlock)
-            outputCapsuleA = h.get_capsule_datablock(CapsuleLinkNode, 'outputCapsuleA', dataBlock, inputCapsuleA.pq.copy())
-            outputCapsuleB = h.get_capsule_datablock(CapsuleLinkNode, 'outputCapsuleB', dataBlock, inputCapsuleB.pq.copy())
+            inputCapsuleA = get_capsule_datablock(cls, 'inputCapsuleA', dataBlock)
+            inputCapsuleB = get_capsule_datablock(cls, 'inputCapsuleB', dataBlock)
+            outputCapsuleA = get_capsule_datablock(cls, 'outputCapsuleA', dataBlock, inputCapsuleA.pq.copy())
+            outputCapsuleB = get_capsule_datablock(cls, 'outputCapsuleB', dataBlock, inputCapsuleB.pq.copy())
 
             link = CapsuleLink.gather(inputCapsuleA, inputCapsuleB)
 
-            weight = dataBlock.inputValue(CapsuleLinkNode.weight).asDouble()
-            abRatio = dataBlock.inputValue(CapsuleLinkNode.abRatio).asDouble()
-            aOrientationRatio = dataBlock.inputValue(CapsuleLinkNode.aOrientationRatio).asDouble()
+            weight = dataBlock.inputValue(cls.weight).asDouble()
+            abRatio = dataBlock.inputValue(cls.abRatio).asDouble()
+            aOrientationRatio = dataBlock.inputValue(cls.aOrientationRatio).asDouble()
             a,b = link.solve(outputCapsuleA, outputCapsuleB, weight, abRatio, aOrientationRatio)
 
-            dataBlock.outputValue( CapsuleLinkNode.outputA ).setMMatrix (matrixToMaya(a.matrix()))
-            dataBlock.outputValue( CapsuleLinkNode.outputB ).setMMatrix (matrixToMaya(b.matrix()))
+            dataBlock.outputValue( cls.outputA ).setMMatrix (matrixToMaya(a.matrix()))
+            dataBlock.outputValue( cls.outputB ).setMMatrix (matrixToMaya(b.matrix()))
             
             dataBlock.setClean( plug )
 
@@ -56,61 +113,61 @@ def nodeCreator():
     
 # initializer
 def nodeInitializer():
-
+    classname = CapsuleLinkNode
     # input
-    inputCapsuleA = h.create_capsule_compound(CapsuleLinkNode, 'inputCapsuleA')
-    inputCapsuleB = h.create_capsule_compound(CapsuleLinkNode, 'inputCapsuleB')
-    outputCapsuleA = h.create_capsule_compound(CapsuleLinkNode, 'outputCapsuleA')
-    outputCapsuleB = h.create_capsule_compound(CapsuleLinkNode, 'outputCapsuleB')
+    inputCapsuleA = create_capsule_compound(classname, 'inputCapsuleA')
+    inputCapsuleB = create_capsule_compound(classname, 'inputCapsuleB')
+    outputCapsuleA = create_capsule_compound(classname, 'outputCapsuleA')
+    outputCapsuleB = create_capsule_compound(classname, 'outputCapsuleB')
 
     mAttr = OpenMaya.MFnMatrixAttribute()
-    CapsuleLinkNode.outputA = mAttr.create( "outputA","outputA" )
+    classname.outputA = mAttr.create( "outputA","outputA" )
     mAttr.array = False
     mAttr.storable = True
     mAttr.writable = True
 
-    CapsuleLinkNode.outputB = mAttr.create( "outputB","outputB" )
+    classname.outputB = mAttr.create( "outputB","outputB" )
     mAttr.array = False
     mAttr.storable = True
     mAttr.writable = True
 
     nAttr = OpenMaya.MFnNumericAttribute()
-    CapsuleLinkNode.weight = nAttr.create( "weight", "weight", OpenMaya.MFnNumericData.kDouble, 1.0 )
+    classname.weight = nAttr.create( "weight", "weight", OpenMaya.MFnNumericData.kDouble, 1.0 )
     nAttr.array = False
     nAttr.storable = True
     nAttr.writable = True
 
-    CapsuleLinkNode.abRatio = nAttr.create( "abRatio", "abRatio", OpenMaya.MFnNumericData.kDouble, 0.0 )
+    classname.abRatio = nAttr.create( "abRatio", "abRatio", OpenMaya.MFnNumericData.kDouble, 0.0 )
     nAttr.array = False
     nAttr.storable = True
     nAttr.writable = True
 
-    CapsuleLinkNode.aOrientationRatio = nAttr.create( "aOrientationRatio", "aOrientationRatio", OpenMaya.MFnNumericData.kDouble, 1.0 )
+    classname.aOrientationRatio = nAttr.create( "aOrientationRatio", "aOrientationRatio", OpenMaya.MFnNumericData.kDouble, 1.0 )
     nAttr.array = False
     nAttr.storable = True
     nAttr.writable = True
 
-    CapsuleLinkNode.addAttribute(CapsuleLinkNode.outputA)
-    CapsuleLinkNode.addAttribute(CapsuleLinkNode.outputB)
-    CapsuleLinkNode.addAttribute(CapsuleLinkNode.weight)
-    CapsuleLinkNode.addAttribute(CapsuleLinkNode.abRatio)
-    CapsuleLinkNode.addAttribute(CapsuleLinkNode.aOrientationRatio)
+    classname.addAttribute(classname.outputA)
+    classname.addAttribute(classname.outputB)
+    classname.addAttribute(classname.weight)
+    classname.addAttribute(classname.abRatio)
+    classname.addAttribute(classname.aOrientationRatio)
     
-    CapsuleLinkNode.attributeAffects( inputCapsuleA, CapsuleLinkNode.outputA )
-    CapsuleLinkNode.attributeAffects( inputCapsuleA, CapsuleLinkNode.outputB )
-    CapsuleLinkNode.attributeAffects( inputCapsuleB, CapsuleLinkNode.outputA )
-    CapsuleLinkNode.attributeAffects( inputCapsuleB, CapsuleLinkNode.outputB )
-    CapsuleLinkNode.attributeAffects( outputCapsuleA, CapsuleLinkNode.outputA )
-    CapsuleLinkNode.attributeAffects( outputCapsuleA, CapsuleLinkNode.outputB )
-    CapsuleLinkNode.attributeAffects( outputCapsuleB, CapsuleLinkNode.outputA )
-    CapsuleLinkNode.attributeAffects( outputCapsuleB, CapsuleLinkNode.outputB )
+    classname.attributeAffects( inputCapsuleA, classname.outputA )
+    classname.attributeAffects( inputCapsuleA, classname.outputB )
+    classname.attributeAffects( inputCapsuleB, classname.outputA )
+    classname.attributeAffects( inputCapsuleB, classname.outputB )
+    classname.attributeAffects( outputCapsuleA, classname.outputA )
+    classname.attributeAffects( outputCapsuleA, classname.outputB )
+    classname.attributeAffects( outputCapsuleB, classname.outputA )
+    classname.attributeAffects( outputCapsuleB, classname.outputB )
 
-    CapsuleLinkNode.attributeAffects( CapsuleLinkNode.weight, CapsuleLinkNode.outputA )
-    CapsuleLinkNode.attributeAffects( CapsuleLinkNode.weight, CapsuleLinkNode.outputB )
-    CapsuleLinkNode.attributeAffects( CapsuleLinkNode.abRatio, CapsuleLinkNode.outputA )
-    CapsuleLinkNode.attributeAffects( CapsuleLinkNode.abRatio, CapsuleLinkNode.outputB )
-    CapsuleLinkNode.attributeAffects( CapsuleLinkNode.aOrientationRatio, CapsuleLinkNode.outputA )
-    CapsuleLinkNode.attributeAffects( CapsuleLinkNode.aOrientationRatio, CapsuleLinkNode.outputB )
+    classname.attributeAffects( classname.weight, classname.outputA )
+    classname.attributeAffects( classname.weight, classname.outputB )
+    classname.attributeAffects( classname.abRatio, classname.outputA )
+    classname.attributeAffects( classname.abRatio, classname.outputB )
+    classname.attributeAffects( classname.aOrientationRatio, classname.outputA )
+    classname.attributeAffects( classname.aOrientationRatio, classname.outputB )
 
 
 
