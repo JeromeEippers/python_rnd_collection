@@ -4,7 +4,8 @@ import maya.api.OpenMaya as OpenMaya
 import mtypes as t
 from mayamatrix import mayaToMatrix, matrixToMaya
 from Skeleton import create_skeleton_compound, create_skeletons_from_input, transfer_skeletons, output_skeleton
-from Primitive import create_primitives_compound
+from Primitive import create_primitives_compound, create_primitives_from_input
+from PrimitiveLink import create_primitive_links_compound, create_primitives_links_from_input
 
 maya_useNewAPI = True 
 kPluginNodeTypeName = "ConstraintSolverNode"
@@ -31,9 +32,38 @@ class ConstraintSolverNode(OpenMaya.MPxNode):
 
         if ( plug == cls.outputs ):
             
-            #src, dst = create_skeletons_from_input(cls, 'skeleton', dataBlock)
-            #transfer_skeletons(src, dst)
-            #output_skeleton(cls, 'outputs', dataBlock, dst)
+            src, dst = create_skeletons_from_input(cls, 'skeleton', dataBlock)
+            primitiveSource = create_primitives_from_input(cls, 'primitiveSource', dataBlock)
+            primitiveDestination = create_primitives_from_input(cls, 'primitiveDestination', dataBlock)
+            links = create_primitives_links_from_input(cls, 'link', dataBlock)
+
+            #gather links
+            for link in links:
+                link.gather(primitiveSource, src)
+
+
+            #transfer bone animation
+            transfer_skeletons(src, dst)
+
+            #solve links
+            for iteration in range(10):
+                s = 0.1 + iteration/9.0
+                for link in links:
+                    if link.weight > 0.001 :
+                        a,b = link.solve(primitiveDestination, dst)
+
+                        primitiveA = primitiveDestination[link.primitiveIdA]
+                        primitiveB = primitiveDestination[link.primitiveIdB]
+
+                        ao = dst.globalPq(primitiveA.boneParent)
+                        bo = dst.globalPq(primitiveB.boneParent)
+
+                        dst.setGlobalPq(primitiveA.boneParent, t.PosQuat.lerp(ao, a, s))
+                        dst.setGlobalPq(primitiveB.boneParent, t.PosQuat.lerp(bo, b, s))
+       
+            output_skeleton(cls, 'outputs', dataBlock, dst)
+
+            
             dataBlock.setClean( plug )
 
 # creator
@@ -48,7 +78,9 @@ def nodeInitializer():
 
     #input
     skel = create_skeleton_compound(classname, 'skeleton')
-    primitives = create_primitives_compound(classname, 'primitive')
+    primitivesS = create_primitives_compound(classname, 'primitiveSource')
+    primitivesD = create_primitives_compound(classname, 'primitiveDestination')
+    link = create_primitive_links_compound(classname, 'link')
 
     # output
     mAttr = OpenMaya.MFnMatrixAttribute()
@@ -60,7 +92,9 @@ def nodeInitializer():
     classname.addAttribute(classname.outputs)
 
     classname.attributeAffects(skel, classname.outputs)
-    classname.attributeAffects(primitives, classname.outputs)
+    classname.attributeAffects(primitivesS, classname.outputs)
+    classname.attributeAffects(primitivesD, classname.outputs)
+    classname.attributeAffects(link, classname.outputs)
     
 
 
@@ -82,3 +116,4 @@ def uninitializePlugin(mobject):
     except:
         sys.stderr.write( "Failed to register node: %s" % kPluginNodeTypeName )
         raise
+    

@@ -11,6 +11,16 @@ class CapsuleLink(object):
         self.normalB = normalB
         self.relativePq = relativePq
 
+    def __repr__(self):
+        return """CapsuleLink(
+            distance={}, 
+            ratioA={}, 
+            ratioB={},
+            normalA={},
+            normalB={},
+            relativePq={}
+        )""".format(self.distance, self.ratioA, self.ratioB, self.normalA, self.normalB, self.relativePq)
+
     @classmethod
     def gather(cls, capsuleA, capsuleB):
         return cls(*(capsuleA.distance(capsuleB)))

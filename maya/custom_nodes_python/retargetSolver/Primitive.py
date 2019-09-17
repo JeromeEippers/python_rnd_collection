@@ -13,6 +13,12 @@ class Primitive(object):
     def addCapsule(self, capsule):
         self.capsules.append(capsule)
 
+    def __repr__(self):
+        return """Primitive(
+            boneParent={}, 
+            capsules=[{}]
+        )""".format(self.boneParent, ', \n'.join([str(x) for x in self.capsules]))
+
 
 
 def create_primitives_compound(classtype, name):
@@ -26,7 +32,7 @@ def create_primitives_compound(classtype, name):
 
     mCompC = OpenMaya.MFnCompoundAttribute()
     capsule = mCompC.create(name+"Capsule", name+"Capsule")
-    setattr(classtype, name, capsule)
+    setattr(classtype, name+"Capsule", capsule)
     mCompC.array = True
     mCompC.storable = True
     mCompC.writable = True
@@ -77,3 +83,38 @@ def create_primitives_compound(classtype, name):
     classtype.addAttribute(compound)
 
     return compound
+
+
+def create_primitives_from_input(classtype, name, dataBlock):
+    primitives = []
+
+    primitivesHandle = dataBlock.inputArrayValue( getattr(classtype, name))
+    while primitivesHandle.isDone() == False:
+
+        primitiveHandle = primitivesHandle.inputValue()
+
+        boneParent = primitiveHandle.child(getattr(classtype, name + "BoneParent")).asInt()
+        primitive = Primitive(boneParent)
+        primitives.append(primitive)
+
+        capsulesHandle = OpenMaya.MArrayDataHandle( primitiveHandle.child(getattr(classtype, name + "Capsule")) )
+
+        while capsulesHandle.isDone() == False:
+            capsuleHandle = capsulesHandle.inputValue()
+
+            matrix = mayaToMatrix(capsuleHandle.child(getattr(classtype, name + "CapsuleMatrix")).asMatrix())
+            radius = capsuleHandle.child(getattr(classtype, name + "CapsuleRadius")).asDouble()
+            height = capsuleHandle.child(getattr(classtype, name + "CapsuleHeight")).asDouble()
+
+            capsulesHandle.next()
+
+            primitive.addCapsule( t.Capsule(
+                t.PosQuat.fromMatrix(matrix),
+                radius,
+                height
+            ))
+            
+
+        primitivesHandle.next()
+
+    return primitives

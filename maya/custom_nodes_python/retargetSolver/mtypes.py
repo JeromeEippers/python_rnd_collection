@@ -164,7 +164,9 @@ class Quaternion(Vector):
             q2 = self.__class__([0] + other._values)
             return Vector(((self * q2) * self.conjugate())._values[1:])
         
-        raise Exception('unsupported multiplication')
+        import traceback
+        traceback.print_stack()
+        raise Exception('unsupported multiplication {} * {}'.format(self, other))
 
     def conjugate(self):
         w, x, y, z = self._values
@@ -254,7 +256,7 @@ class Quaternion(Vector):
     
 class PosQuat(object):
     
-    def __init__(self, p=Vector.zeros(0), q=Quaternion.identity()):
+    def __init__(self, p=Vector.zeros(3), q=Quaternion.identity()):
         self.p = p
         self.q = q
 
@@ -396,6 +398,12 @@ class Capsule(object):
         self.pq = pq
         self.radius = radius
         self.length = length
+
+    def copy(self):
+        return self.__class__(self.pq.copy(), self.radius, self.length)
+
+    def __repr__(self):
+        return 'Capsule(pq={}, radius={}, length={})'.format(self.pq, self.radius, self.length)
         
     def distance(self, other):
         """
@@ -416,20 +424,7 @@ class Capsule(object):
         
         #segment segment distance
         pt1, pt2, t1, t2 = segments_distance(selfstart, selfend, otherstart, otherend)
-        #this is not exactly how we want to compute this, because of jumps in the ratios when using this method
-        #instead we will do segment point relations between each capsule and the center of the other one
-        """
-        sv = (selfend-selfstart)
-        t1 = sv.dot(other.pq.p) / sv.length()
-        t1 = min(1, max(0, t1))
-        pt1 = selfstart + sv.scale(t1)
 
-        ov = (otherend-otherstart)
-        t2 = sv.dot(self.pq.p) / ov.length()
-        t2 = min(1, max(0, t2))
-        pt2 = otherstart + ov.scale(t2)
-        """
-        
         #compute vector and distance
         vect = pt2-pt1
         distance = vect.length()

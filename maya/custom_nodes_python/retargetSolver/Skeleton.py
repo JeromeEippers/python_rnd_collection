@@ -19,6 +19,17 @@ class Skeleton(object):
     def add(self, pq, parent, retargetTrScale, retargetTr):
         self.bones.append(self.__class__.Bone(pq, parent, retargetTrScale, retargetTr))
 
+    def globalPq(self, id):
+        if self.bones[id].parent < 0:
+            return self.bones[id].pq.copy()
+        return self.globalPq(self.bones[id].parent) * self.bones[id].pq
+
+    def setGlobalPq(self, id, pq):
+        newPosQuat = pq
+        if self.bones[id].parent >= 0 :
+            newPosQuat = self.globalPq(self.bones[id].parent).inverse() * pq
+        self.bones[id].pq = newPosQuat.copy()
+
 
 
 def create_skeleton_compound(classtype, name):
