@@ -201,4 +201,4 @@ right_leg = BodyPart(BodyPart.BlendType.LOCAL, 15, [
     "GamEx:RightFootToes"
 ])
 
-inertialize_animation(19, [root, spine, head, left_arm, right_arm, left_leg, right_leg])
+inertialize_animation(9, [root, spine, head, left_arm, right_arm, left_leg, right_leg])
