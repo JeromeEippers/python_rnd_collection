@@ -16,6 +16,7 @@ class DataSkeleton(object):
     
     def __init__(self):
         self._bones = []
+        self._anchors = []
         
     def convert_to_np(self):
         for bone in self._bones:
@@ -24,11 +25,25 @@ class DataSkeleton(object):
                 bone._matrix[4:8],
                 bone._matrix[8:12],
                 bone._matrix[12:16]])
+            bone._matrix[3] *= np.array([0.01,0.01,0.01,1])
+        for bone in self._anchors:
+            bone._matrix = np.array([
+                bone._matrix[0:4],
+                bone._matrix[4:8],
+                bone._matrix[8:12],
+                bone._matrix[12:16]])
+            bone._matrix[3] *= np.array([0.01,0.01,0.01,1])
             
     def globalMatrix(self, boneId):
         if self._bones[boneId]._parentId >= 0:
             return np.dot(self._bones[boneId]._matrix, self.globalMatrix(self._bones[boneId]._parentId))
         return self._bones[boneId]._matrix.copy()
+    
+    def anchorGlobalPosition(self, anchorId):
+        return np.dot(self._anchors[anchorId]._matrix, self.globalMatrix(self._anchors[anchorId]._parentId))[3][:3]
+    
+    def bone_id(self, name):
+        return next((b._id for b in self._bones if b._name == name),0)
     
     def load_animation(self, animation, frame):
         keycount, tracks = animation
