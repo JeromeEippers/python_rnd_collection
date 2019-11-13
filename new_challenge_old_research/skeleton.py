@@ -52,6 +52,16 @@ class DataSkeleton(object):
             bone = next((bone for bone in self._bones if bone._name == name),None)
             if bone:
                 bone._matrix = track[1][frame]
+                
+    def create_tracks_buffer(self):
+        return [(bone._name, []) for bone in self._bones]
+    
+    def save_tracks(self, tracks_buffer):
+        for track in tracks_buffer:
+            name = track[0]
+            bone = next((bone for bone in self._bones if bone._name == name))
+            track[1].append(bone._matrix)
+            
     
     
 def load_skeleton(path):
