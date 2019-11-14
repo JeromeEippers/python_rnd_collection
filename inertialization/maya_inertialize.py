@@ -129,7 +129,7 @@ class BodyPart(object):
             
             
             
-def inertialize_animation(discontinuityFrame, bodyParts):
+def inertialize_animation(discontinuityFrame, nextdiscontinuityFrame, bodyParts):
     
     #gather values
     cmds.currentTime(discontinuityFrame-2)
@@ -147,7 +147,11 @@ def inertialize_animation(discontinuityFrame, bodyParts):
     
         
     for frame in range(startFrame, endFrame):
+        if frame >= nextdiscontinuityFrame:
+            break
+            
         t = float(frame-startFrame+1)/30.0
+        
         
         cmds.currentTime(frame)
         
@@ -163,42 +167,42 @@ def inertialize_animation(discontinuityFrame, bodyParts):
             bp.key()
 
 
-root = BodyPart(BodyPart.BlendType.WORLD_TR, 15, [
-    "GamEx:Hips"
+root = BodyPart(BodyPart.BlendType.WORLD_TR, 7, [
+    "Greyman:Hips"
 ])
-spine = BodyPart(BodyPart.BlendType.WORLD, 8, [
-    "GamEx:Spine",
-    "GamEx:Spine1",
-    "GamEx:Spine2",
-    "GamEx:Neck"
+spine = BodyPart(BodyPart.BlendType.WORLD, 5, [
+    "Greyman:Spine",
+    "Greyman:Spine1",
+    "Greyman:Spine2",
+    "Greyman:Neck"
 ])
-head = BodyPart(BodyPart.BlendType.WORLD, 6, [
-    "GamEx:Neck1",
-    "GamEx:Head"
+head = BodyPart(BodyPart.BlendType.WORLD, 5, [
+    "Greyman:Neck1",
+    "Greyman:Head"
 ])
-left_arm = BodyPart(BodyPart.BlendType.LOCAL, 20, [
-    "GamEx:LeftClavicle",
-    "GamEx:LeftArm",
-    "GamEx:LeftForeArm",
-    "GamEx:LeftHand"
+left_arm = BodyPart(BodyPart.BlendType.LOCAL, 4, [
+    "Greyman:LeftClavicle",
+    "Greyman:LeftArm",
+    "Greyman:LeftForeArm",
+    "Greyman:LeftHand"
 ])
-right_arm = BodyPart(BodyPart.BlendType.LOCAL, 20, [
-    "GamEx:RightClavicle",
-    "GamEx:RightArm",
-    "GamEx:RightForeArm",
-    "GamEx:RightHand"
+right_arm = BodyPart(BodyPart.BlendType.LOCAL, 4, [
+    "Greyman:RightClavicle",
+    "Greyman:RightArm",
+    "Greyman:RightForeArm",
+    "Greyman:RightHand"
 ])
-left_leg = BodyPart(BodyPart.BlendType.LOCAL, 15, [
-    "GamEx:LeftUpLeg",
-    "GamEx:LeftLeg",
-    "GamEx:LeftFoot",
-    "GamEx:LeftFootToes"
+left_leg = BodyPart(BodyPart.BlendType.LOCAL, 7, [
+    "Greyman:LeftUpLeg",
+    "Greyman:LeftLeg",
+    "Greyman:LeftFoot",
+    "Greyman:LeftFootToes"
 ])
-right_leg = BodyPart(BodyPart.BlendType.LOCAL, 15, [
-    "GamEx:RightUpLeg",
-    "GamEx:RightLeg",
-    "GamEx:RightFoot",
-    "GamEx:RightFootToes"
+right_leg = BodyPart(BodyPart.BlendType.LOCAL, 7, [
+    "Greyman:RightUpLeg",
+    "Greyman:RightLeg",
+    "Greyman:RightFoot",
+    "Greyman:RightFootToes"
 ])
 
-inertialize_animation(9, [root, spine, head, left_arm, right_arm, left_leg, right_leg])
+#inertialize_animation(9, 100, [root, spine, head, left_arm, right_arm, left_leg, right_leg])

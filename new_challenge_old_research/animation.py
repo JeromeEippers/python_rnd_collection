@@ -28,3 +28,14 @@ def load_animation(path):
     return (len(tracks[0][1]), tracks)
     
     
+def save_animation(path, tracks_buffer):
+    
+    tracks = []
+    for track in tracks_buffer:
+        keys = [m.flatten().tolist() for m in track[1]]
+        tracks.append((track[0], keys))
+        
+    x = pickle.dumps(tracks, protocol=2)
+    with open(path, 'wb') as f:
+        f.write(x)
+    

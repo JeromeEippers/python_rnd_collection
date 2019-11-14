@@ -17,6 +17,7 @@ class DataSkeleton(object):
     def __init__(self):
         self._bones = []
         self._anchors = []
+        self._world_matrix = np.array([[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]], dtype=float)
         
     def convert_to_np(self):
         for bone in self._bones:
@@ -37,7 +38,7 @@ class DataSkeleton(object):
     def globalMatrix(self, boneId):
         if self._bones[boneId]._parentId >= 0:
             return np.dot(self._bones[boneId]._matrix, self.globalMatrix(self._bones[boneId]._parentId))
-        return self._bones[boneId]._matrix.copy()
+        return np.dot(self._bones[boneId]._matrix, self._world_matrix)
     
     def anchorGlobalPosition(self, anchorId):
         return np.dot(self._anchors[anchorId]._matrix, self.globalMatrix(self._anchors[anchorId]._parentId))[3][:3]
@@ -60,11 +61,16 @@ class DataSkeleton(object):
         for track in tracks_buffer:
             name = track[0]
             bone = next((bone for bone in self._bones if bone._name == name))
-            track[1].append(bone._matrix)
+            if bone._parentId >= 0:
+                track[1].append(bone._matrix)
+            else:
+                track[1].append(np.dot(bone._matrix, self._world_matrix))
             
     
     
 def load_skeleton(path):
     skeleton = pickle.load(open(path,'rb'))
     skeleton.convert_to_np()
+    #inject the world matrix, because pickle seems to lose it (was not part of the pickle data)
+    skeleton._world_matrix = np.array([[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]], dtype=float)
     return skeleton
