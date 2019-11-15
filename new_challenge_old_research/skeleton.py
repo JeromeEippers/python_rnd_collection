@@ -17,7 +17,6 @@ class DataSkeleton(object):
     def __init__(self):
         self._bones = []
         self._anchors = []
-        self._world_matrix = np.array([[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]], dtype=float)
         
     def convert_to_np(self):
         for bone in self._bones:
@@ -35,10 +34,18 @@ class DataSkeleton(object):
                 bone._matrix[12:16]])
             bone._matrix[3] *= np.array([0.01,0.01,0.01,1])
             
+    @property
+    def world(self):
+        return self._bones[0]._matrix
+
+    @world.setter
+    def world(self, m):
+        self._bones[0]._matrix = m
+            
     def globalMatrix(self, boneId):
         if self._bones[boneId]._parentId >= 0:
             return np.dot(self._bones[boneId]._matrix, self.globalMatrix(self._bones[boneId]._parentId))
-        return np.dot(self._bones[boneId]._matrix, self._world_matrix)
+        return self._bones[boneId]._matrix.copy()
     
     def anchorGlobalPosition(self, anchorId):
         return np.dot(self._anchors[anchorId]._matrix, self.globalMatrix(self._anchors[anchorId]._parentId))[3][:3]
@@ -55,22 +62,23 @@ class DataSkeleton(object):
                 bone._matrix = track[1][frame]
                 
     def create_tracks_buffer(self):
-        return [(bone._name, []) for bone in self._bones]
+        return [(bone._name, []) for bone in self._bones[1:]] #when we do animation we do not animate the world
     
     def save_tracks(self, tracks_buffer):
+        #when we save the tracks we save it by backing the world into the first bone
         for track in tracks_buffer:
             name = track[0]
-            bone = next((bone for bone in self._bones if bone._name == name))
-            if bone._parentId >= 0:
-                track[1].append(bone._matrix)
+            bone = next((bone for bone in self._bones[1:] if bone._name == name))
+            if bone._parentId == 0:
+                track[1].append(np.dot(bone._matrix, self.world))
             else:
-                track[1].append(np.dot(bone._matrix, self._world_matrix))
+                track[1].append(bone._matrix)
             
     
     
 def load_skeleton(path):
     skeleton = pickle.load(open(path,'rb'))
     skeleton.convert_to_np()
-    #inject the world matrix, because pickle seems to lose it (was not part of the pickle data)
-    skeleton._world_matrix = np.array([[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]], dtype=float)
+    #reset world to identity
+    skeleton.world = np.array([[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]], dtype=float)
     return skeleton
