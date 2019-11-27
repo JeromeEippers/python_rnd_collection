@@ -65,7 +65,7 @@ class DataSkeleton(object):
         return [(bone._name, []) for bone in self._bones[1:]] #when we do animation we do not animate the world
     
     def save_tracks(self, tracks_buffer):
-        #when we save the tracks we save it by backing the world into the first bone
+        #when we save the tracks we save it by baking the world into the first bone
         for track in tracks_buffer:
             name = track[0]
             bone = next((bone for bone in self._bones[1:] if bone._name == name))

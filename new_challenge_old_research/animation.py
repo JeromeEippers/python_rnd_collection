@@ -2,16 +2,7 @@ import numpy as np
 import pickle
 
 
-def load_animation(path):
-    """
-    Return an animation as :
-    ( keycount,
-        [(bonename, [np.matrix, np.matrix, ...]), () ...]
-    )
-    """
-    
-    animation = pickle.load(open(path,'rb'))
-    
+def _convert_animation(animation):
     #convert matrix in numpy matrices
     #format of the picle is just a list of tuples with :
     #[ (bonename, [matrix, matrix, ...]), () ]
@@ -26,6 +17,26 @@ def load_animation(path):
         tracks.append((track[0], keys))
         
     return (len(tracks[0][1]), tracks)
+
+
+def load_animation(path):
+    """
+    Return an animation as :
+    ( keycount,
+        [(bonename, [np.matrix, np.matrix, ...]), () ...]
+    )
+    """
+    
+    animation = pickle.load(open(path,'rb'))
+    return _convert_animation(animation)
+    
+    
+def load_animations(path):
+    """
+    returns a list of animations
+    """
+    animations = pickle.load(open(path,'rb'))
+    return [_convert_animation(animation) for animation in animations]
     
     
 def save_animation(path, tracks_buffer):
@@ -38,4 +49,5 @@ def save_animation(path, tracks_buffer):
     x = pickle.dumps(tracks, protocol=2)
     with open(path, 'wb') as f:
         f.write(x)
+    
     
