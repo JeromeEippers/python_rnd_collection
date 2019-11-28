@@ -64,7 +64,7 @@ def is_looping_animation(skeleton, animation):
         
     extra = (cloud_a,cloud_b)
     sol = minimize(_objective, [0,0,0], method='SLSQP', args=extra)
-    return sol.fun < 0.0001
+    return sol.fun < 0.001
 
 def start_end_match(skeleton, cloud_a, cloud_b):
     def _objective(xyt, cloud_a, cloud_b):
@@ -74,7 +74,7 @@ def start_end_match(skeleton, cloud_a, cloud_b):
     
     extra = (cloud_a,cloud_b)
     sol = minimize(_objective, [0,0,0], method='SLSQP', args=extra)
-    return sol.fun < 0.01
+    return sol.fun < 0.1
 
 def align_animations(skeleton, animation, animation_frame):
     
