@@ -41,6 +41,9 @@ class DataSkeleton(object):
     @world.setter
     def world(self, m):
         self._bones[0]._matrix = m
+        
+    def bone_children(self, id):
+        return [b for b in self._bones if b._parentId == id]
             
     def globalMatrix(self, boneId):
         if self._bones[boneId]._parentId >= 0:
@@ -73,6 +76,48 @@ class DataSkeleton(object):
                 track[1].append(np.dot(bone._matrix, self.world))
             else:
                 track[1].append(bone._matrix)
+                
+    def convert_animation_to_local(self, animation):
+        buffer = self.create_tracks_buffer()
+        keycount, anim_tracks = animation
+        
+        for track in buffer:
+            name = track[0]
+            bone = next((bone for bone in self._bones[1:] if bone._name == name), None)
+            anim_track = next((anim_track[1] for anim_track in anim_tracks if anim_track[0] == name), None)
+            if bone and anim_track:
+                inv_matrix = np.linalg.inv(bone._matrix)
+                track[1].extend( [np.dot(anim_matrix, inv_matrix) for anim_matrix in anim_track] )
+            
+            if bone._parentId == 0:
+                norm = np.linalg.norm(bone._matrix[3][:3])
+                for i in range(keycount):
+                    track[1][i][3][:3] = anim_track[i][3][:3] / norm
+        
+        returnBuffer = [track for track in buffer if len(track[1])==keycount]
+        return (keycount, returnBuffer)
+    
+    def convert_back_local_animation(self, animation):
+        buffer = self.create_tracks_buffer()
+        keycount, anim_tracks = animation
+        
+        for track in buffer:
+            name = track[0]
+            bone = next((bone for bone in self._bones[1:] if bone._name == name), None)
+            anim_track = next((anim_track[1] for anim_track in anim_tracks if anim_track[0] == name), None)
+            if bone and anim_track:
+                track[1].extend( [np.dot(anim_matrix, bone._matrix) for anim_matrix in anim_track] )
+                
+            if bone._parentId == 0:
+                norm = np.linalg.norm(bone._matrix[3][:3])
+                for i in range(keycount):
+                    track[1][i][3][:3] = anim_track[i][3][:3] * norm
+                
+        returnBuffer = [track for track in buffer if len(track[1])==keycount]
+        return (keycount, returnBuffer)
+                    
+                
+    
             
     
     
