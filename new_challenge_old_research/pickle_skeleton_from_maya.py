@@ -23,6 +23,7 @@ def build_skeleton(bone, parent):
     name = bone.split(':')[-1].split('|')[-1]
     print('bone', name)
     m = cmds.xform(bone, matrix=True, q=True)
+    print(m)
     sb = DataBone(len(skeleton._bones), parent, name, m)
     skeleton._bones.append(sb)
     for child in [x for x in cmds.listRelatives(bone, children=True, type='transform', shapes=False, fullPath=True) or [] if x]:
@@ -37,10 +38,10 @@ def build_skeleton(bone, parent):
         build_skeleton(child, sb._id)
     
 
-build_skeleton( 'Rhino:Rhino_Base', -1 )
+build_skeleton( 'RhinoAligned:Rhino_Base', -1 )
 
 import pickle
 x = pickle.dumps(skeleton)
-with open(r'D:\Github\python_rnd_collection\new_challenge_old_research\skeleton_retarget_rhino.dat', 'wb') as f:
+with open(r'D:\Github\python_rnd_collection\new_challenge_old_research\skeleton_retarget_rhinoAligned.dat', 'wb') as f:
     f.write(x)
     

@@ -50,6 +50,13 @@ class DataSkeleton(object):
             return np.dot(self._bones[boneId]._matrix, self.globalMatrix(self._bones[boneId]._parentId))
         return self._bones[boneId]._matrix.copy()
     
+    def setGlobalMatrix(self, boneId, matrix):
+        if self._bones[boneId]._parentId >= 0:
+            parent = self.globalMatrix(self._bones[boneId]._parentId)
+            self._bones[boneId]._matrix = np.dot(matrix, np.linalg.inv(parent))
+        else:
+            self._bones[boneId]._matrix = matrix
+    
     def anchorGlobalPosition(self, anchorId):
         return np.dot(self._anchors[anchorId]._matrix, self.globalMatrix(self._anchors[anchorId]._parentId))[3][:3]
     
@@ -62,7 +69,7 @@ class DataSkeleton(object):
             name = track[0]
             bone = next((bone for bone in self._bones if bone._name == name),None)
             if bone:
-                bone._matrix = track[1][frame]
+                bone._matrix = track[1][frame].copy()
                 
     def create_tracks_buffer(self):
         return [(bone._name, []) for bone in self._bones[1:]] #when we do animation we do not animate the world
@@ -73,9 +80,9 @@ class DataSkeleton(object):
             name = track[0]
             bone = next((bone for bone in self._bones[1:] if bone._name == name))
             if bone._parentId == 0:
-                track[1].append(np.dot(bone._matrix, self.world))
+                track[1].append(np.dot(bone._matrix.copy(), self.world))
             else:
-                track[1].append(bone._matrix)
+                track[1].append(bone._matrix.copy())
                 
     def convert_animation_to_local(self, animation):
         buffer = self.create_tracks_buffer()
@@ -115,6 +122,13 @@ class DataSkeleton(object):
                 
         returnBuffer = [track for track in buffer if len(track[1])==keycount]
         return (keycount, returnBuffer)
+    
+    def adapt_bone_lengths(self, other, ratio):
+        for src, dst in zip(other._bones[2:]+other._anchors, self._bones[2:]+self._anchors):
+            selfLen = np.linalg.norm(dst._matrix[3][:3])
+            otherLen = np.linalg.norm(src._matrix[3][:3])
+            if selfLen > 0.001:
+                dst._matrix[3][:3] *= (ratio*otherLen + (1.0-ratio)*selfLen)/selfLen
                     
                 
     

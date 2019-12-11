@@ -6,21 +6,27 @@ class RealignMatrix(object):
     def get_M_aligned_to_x(M, x):
         x = x/np.linalg.norm(x)
         z = np.cross(x, M[1][:3])
+        z = z/np.linalg.norm(z)
         y = np.cross(z, x)
+        y = y/np.linalg.norm(y)
         return np.array([x.tolist()+[0],y.tolist()+[0],z.tolist()+[0],M[3]], dtype=float)
 
     @staticmethod
     def get_M_aligned_to_y(M, y):
         y = y/np.linalg.norm(y)
         x = np.cross(y, M[2][:3])
+        x = x/np.linalg.norm(x)
         z = np.cross(x, y)
+        z = z/np.linalg.norm(z)
         return np.array([x.tolist()+[0],y.tolist()+[0],z.tolist()+[0],M[3]], dtype=float)
 
     @staticmethod
     def get_M_aligned_to_z(M, z):
         z = z/np.linalg.norm(z)
         y = np.cross(z, M[0][:3])
+        y = y/np.linalg.norm(y)
         x = np.cross(y, z)
+        x = x/np.linalg.norm(x)
         return np.array([x.tolist()+[0],y.tolist()+[0],z.tolist()+[0],M[3]], dtype=float)
     
     
@@ -34,7 +40,7 @@ class RealignMatrix(object):
         self._aligned_matrices = []
         self._local_parent_matrices = []
         for axis, vector in zip(self._aligned_axis, local_vectors):
-            matrix = [self.get_M_aligned_to_x, self.get_M_aligned_to_y, self.get_M_aligned_to_z][axis](I, vector)
+            matrix = [self.get_M_aligned_to_x, self.get_M_aligned_to_y, self.get_M_aligned_to_z][axis](M, vector)
             matrix[3][:3] = M[3][:3]
             self._aligned_matrices.append(np.dot(M, np.linalg.inv(matrix)))
             
@@ -62,9 +68,3 @@ class RealignMatrix(object):
         result_matrix[3][:3] = M[3][:3]
         return result_matrix
     
-    def solve_from_world_coordinates(self, M, M_world, world_points):
-        world_inv = np.linalg.inv(M_world)
-        local_vectors = [
-            np.dot([p[0],p[1],p[2],1], world_inv)[:3] for p in world_points
-        ]
-        return self.solve_from_local_vectors(M, local_vectors)
