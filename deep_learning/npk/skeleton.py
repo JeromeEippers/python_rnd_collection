@@ -24,6 +24,16 @@ class Skeleton(object):
                 pose[i, :, :] = localpose[i, :, :]
         return pose
 
+    def localpose(self, globalpose):
+        count = len(self.bones)
+        pose = np.zeros([count, 4, 4])
+        for i in range(count):
+            if self.bones[i].parent > -1:
+                pose[i, :, :] = np.dot(globalpose[i, :, :], np.linalg.inv(globalpose[self.bones[i].parent, :, :]))
+            else:
+                pose[i, :, :] = globalpose[i, :, :]
+        return pose
+
     def boneid(self, name):
         for i in range(len(self.bones)):
             if self.bones[i].name == name:

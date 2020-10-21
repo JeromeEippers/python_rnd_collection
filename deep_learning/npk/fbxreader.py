@@ -97,6 +97,7 @@ def read_skeleton(pScene):
     _skel(lRootNode.GetChild(0), -1)
 
     skeleton.bindpose = skeleton.bindpose[:len(skeleton.bones), :, :]
+    skeleton.initialpose = skeleton.initialpose[:len(skeleton.bones), :, :]
 
     return skeleton
 
@@ -179,16 +180,18 @@ def read_animations(pScene, skeleton):
 
         animlen = stop.GetFrameCount() - start.GetFrameCount() + 1
         bonelen = len(skeleton.bones)
-        animation = np.zeros([animlen, bonelen, 4, 4])
+        animation = np.repeat(skeleton.initialpose[np.newaxis,...], animlen, axis=0)
 
         for frame in range(start.GetFrameCount(), stop.GetFrameCount() + 1):
+            animframe = frame - start.GetFrameCount()
             time.SetFrame(frame)
             for boneid in range(bonelen):
                 bone = skeleton.bones[boneid]
-                localMatrix = mapping[bone.name].EvaluateLocalTransform(time)
-                for i in range(4):
-                    for j in range(4):
-                        animation[frame, boneid, i, j] = localMatrix.Get(i, j)
+                if bone.name in mapping and mapping[bone.name] is not None:
+                    localMatrix = mapping[bone.name].EvaluateGlobalTransform(time)
+                    for i in range(4):
+                        for j in range(4):
+                            animation[animframe, boneid, i, j] = localMatrix.Get(i, j)
 
         animations[name] = animation
     return animations
@@ -233,7 +236,9 @@ class FbxReader(object):
             return self._skinning
         raise Exception('no mesh')
 
-    def animation_dictionary(self):
+    def animation_dictionary(self, skeleton=None):
         if self._animations is None:
-            self._animations = read_animations(self._scene, self.skeleton())
+            if skeleton is None:
+                skeleton = self.skeleton()
+            self._animations = read_animations(self._scene, skeleton)
         return self._animations
