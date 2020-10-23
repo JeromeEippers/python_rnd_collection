@@ -1,14 +1,19 @@
 from pathlib import Path
 import pickle
 import numpy as np
+import posquat as pq
 
 from viewer import viewer
 import fbxreader
-import moderngl
+import displacement as disp
+import transform as tr
+
 
 resource_dir = Path(__file__).parent.resolve() / 'resources'
 
 '''
+# DUMP CHARACTER
+
 reader = fbxreader.FbxReader(str(resource_dir / 'simplified_man_average.fbx'))
 x = pickle.dumps(
     (*reader.vertices_and_indices(),
@@ -18,108 +23,126 @@ x = pickle.dumps(
 with open(str(resource_dir / 'simplified_man_average.dump'), 'wb') as f:
     f.write(x)
     
+
+# DUMP ANIMATIONS
+
 vertices, indices, skinningindices, skinningweights, skeleton = pickle.load(open(str(resource_dir / 'simplified_man_average.dump'), 'rb'))
 reader = fbxreader.FbxReader(str(resource_dir / 'side_steps.fbx'))
 animation = reader.animation_dictionary(skeleton)['Take 001']
+disp.update_matrix_anim_projecting_disp_on_ground(animation)
 x = pickle.dumps(animation)
 with open(str(resource_dir / 'side_steps.dump'), 'wb') as f:
+    f.write(x)
+
+reader = fbxreader.FbxReader(str(resource_dir / 'turn_steps.fbx'))
+animation = reader.animation_dictionary(skeleton)['Take 001']
+disp.update_matrix_anim_projecting_disp_on_ground(animation)
+x = pickle.dumps(animation)
+with open(str(resource_dir / 'turn_steps.dump'), 'wb') as f:
     f.write(x)
 '''
 
 
-def cross(a, b):
-    """Compute a cross product for a list of vectors"""
-    return np.concatenate([
-        a[..., 1:2] * b[..., 2:3] - a[..., 2:3] * b[..., 1:2],
-        a[..., 2:3] * b[..., 0:1] - a[..., 0:1] * b[..., 2:3],
-        a[..., 0:1] * b[..., 1:2] - a[..., 1:2] * b[..., 0:1],
-    ], axis=-1)
+def compute_foot_contact_colors(skel, anim, bonename, speedlimit=15):
+    # generate foot speed
+    footspeed = tr.compute_bone_speed(skel, anim, bonename)
+    contactcolors = np.repeat(np.zeros(3)[np.newaxis, ...], len(anim[0]), axis=0)
+    contactcolors[footspeed < speedlimit] = np.array([1, 0, 0])
+    return contactcolors
 
 
-def project_disp_on_ground(anim):
-    """
-    project displacement on the ground from the hips
-    input animation is in global space already
-    it updates the input animation
-    """
-    anim[:, 0, :, :] = np.array(anim[:, 1, :, :], copy=True)
-    anim[:, 0, 3, 1] = 0
+def split_animation_by_foot_ground_contacts(skel, anim, speedlimit=15):
+    # generate foot speed
+    leftfootspeed = tr.compute_bone_speed(skel, anim, 'Model:LeftFoot')
+    rightfootspeed = tr.compute_bone_speed(skel, anim, 'Model:RightFoot')
 
-    eye = np.eye(4)
-    eye = np.repeat(eye[np.newaxis, ...], len(anim[0]), axis=0)
-    eye = np.repeat(eye[np.newaxis, ...], len(anim), axis=0)
-
-    y = cross(anim[:, 0, 2, :3], eye[:, 0, 1, :3])
-    x = cross(y, eye[:, 0, 1, :3])
-
-    anim[:, 0, 0, :3] = x
-    anim[:, 0, 1, :3] = y
-    anim[:, 0, 2, :3] = eye[:, 0, 1, :3]
-
-
-def kill_displacement(skel, anim):
-    for f in range(len(anim)):
-        anim[f, ...] = skel.localpose(anim[f, ...])
-    anim[:, 0, 3, 0] = 0
-    anim[:, 0, 3, 2] = 0
-    for f in range(len(anim)):
-        anim[f, ...] = skel.globalpose(anim[f, ...])
-
-
-def compute_foot_speed(skel, anim, bonename):
-    id = skel.boneid(bonename)
-    speed = np.zeros(len(anim))
-    for f in range(len(anim) - 1):
-        speed[f + 1] = np.linalg.norm(anim[f + 1, id, 3, :3] - anim[f, id, 3, :3]) * 30.0
-    return speed
-
-def split_animation_by_foot_ground_contacts(skel, anim):
-    #generate foot speed
-    leftfootspeed = compute_foot_speed(skel, anim, 'Model:LeftFoot')
-    rightfootspeed = compute_foot_speed(skel, anim, 'Model:RightFoot')
-
-    #generate foot speed colors
-    leftcontactcolors = np.repeat(np.array([0, 0, 0])[np.newaxis, ...], len(animation), axis=0)
-    leftcontactcolors[leftfootspeed < 15] = np.array([1, 0, 0])
-    rightcontactcolors = np.repeat(np.array([0, 0, 0])[np.newaxis, ...], len(animation), axis=0)
-    rightcontactcolors[rightfootspeed < 15] = np.array([1, 0, 0])
-
-    #splits
-    ranges = np.concatenate(np.argwhere((leftfootspeed <= 15) & (rightfootspeed <= 15)))
+    # splits
+    ranges = np.concatenate(np.argwhere((leftfootspeed <= speedlimit) & (rightfootspeed <= speedlimit)))
     splits = []
     currentbegin = ranges[0]
     lastindex = ranges[0]
     for r in ranges[1:]:
         if r > lastindex + 1:
-            splits.append(int(currentbegin + (lastindex - currentbegin) / 2))
+            if lastindex - currentbegin > 10:
+                splits.append(int(currentbegin + (lastindex - currentbegin) / 2))
             currentbegin = r
         lastindex = r
 
-    animations = []
-    leftfootcolors = []
-    rightfootcolors = []
+    ps, qs = anim
+    list_of_animations = []
     for s in range(len(splits) - 1):
-        animations.append(anim[splits[s]:splits[s + 1], ...])
-        leftfootcolors.append(leftcontactcolors[splits[s]:splits[s + 1], ...])
-        rightfootcolors.append(rightcontactcolors[splits[s]:splits[s + 1], ...])
-
-    return animations, leftfootcolors, rightfootcolors
-
+        list_of_animations.append((
+            ps[splits[s]:splits[s + 1], ...],
+            qs[splits[s]:splits[s + 1], ...]
+        ))
+    list_of_animations.append((
+        ps[splits[-1]:, ...],
+        qs[splits[-1]:, ...]
+    ))
+    return list_of_animations
 
 
 vertices, indices, skinningindices, skinningweights, skeleton = pickle.load(
     open(str(resource_dir / 'simplified_man_average.dump'), 'rb'))
+
+'''
 animation = pickle.load(open(str(resource_dir / 'side_steps.dump'), 'rb'))
+animations = split_animation_by_foot_ground_contacts(skeleton, animation, 15)
 
-#project on ground the displacement
-project_disp_on_ground(animation)
-
-#split the animations
-animations, leftfootcolors, rightfootcolors = split_animation_by_foot_ground_contacts(skeleton, animation)
+animation = pickle.load(open(str(resource_dir / 'turn_steps.dump'), 'rb'))
+animations += split_animation_by_foot_ground_contacts(skeleton, animation, 20)
 
 
-foot_draw = viewer.FootGroundDraw(skeleton, animations[1], leftfootcolors[1], rightfootcolors[1])
-char_draw = viewer.CharacterDraw(True, vertices, indices, skinningindices, skinningweights, skeleton, animations[1])
-viewer.Viewer.drawers.append(foot_draw)
-viewer.Viewer.drawers.append(char_draw)
+animations = [disp.reset_displacement(skeleton, animations[15])]
+animations += [disp.mirror_animation(animations[0])]
+'''
+
+animation = pq.pose_to_pq(pickle.load(open(str(resource_dir / 'side_steps.dump'), 'rb')))
+animations = split_animation_by_foot_ground_contacts(skeleton, animation, 15)
+animations = [disp.reset_displacement_origin(skeleton, anim) for anim in animations]
+
+# TEST LERP
+pos, quat = skeleton.global_to_local(animations[0])
+
+npos = np.zeros([60,24,3])
+nquat = np.zeros([60,24,4])
+
+for i in range(60):
+    npos[i,...], nquat[i,...] = pq.lerp( (pos[0], quat[0]), (pos[50], quat[50]), float(i)/60 )
+
+pos, quat = skeleton.local_to_global((npos, nquat))
+animations = [(pos, quat)] + animations
+
+
+# RENDERING ###############
+currentAnim = -1
+foot_draw = viewer.FootGroundDraw(skeleton)
+char_draw = viewer.CharacterDraw(True, vertices, indices, skinningindices, skinningweights, skeleton)
+
+
+def _keyboard(keys, key, action, modifiers):
+    global currentAnim
+    global foot_draw
+    global char_draw
+    if action == keys.ACTION_PRESS:
+        if key == keys.RIGHT:
+            currentAnim += 1
+        if key == keys.LEFT:
+            currentAnim += -1
+        currentAnim = currentAnim % len(animations[0])
+
+        print(('Switch to animation', currentAnim))
+        anim = animations[currentAnim]
+
+        foot_draw.leftfootcoloranimation = compute_foot_contact_colors(skeleton, anim, 'Model:LeftFoot', 20)
+        foot_draw.rightfootcoloranimation = compute_foot_contact_colors(skeleton, anim, 'Model:RightFoot', 20)
+
+        anim = pq.pq_to_pose(anim)
+        foot_draw.animation = anim
+        char_draw.animation = anim
+
+
+viewer.Viewer.draw_callbacks.append(foot_draw)
+viewer.Viewer.draw_callbacks.append(char_draw)
+viewer.Viewer.keyboard_callbacks.append(_keyboard)
 viewer.mglw.run_window_config(viewer.Viewer)

@@ -14,6 +14,8 @@ class ViewerWindow(mglw.WindowConfig):
     resource_dir = Path(__file__).parent.parent.resolve() / 'resources'
     title = "Viewer"
 
+    keyboard_callbacks = []
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.camera = KeyboardCamera(self.wnd.keys, fov=50.0, aspect_ratio=self.wnd.aspect_ratio, near=1.0, far=5000.0)
@@ -26,6 +28,9 @@ class ViewerWindow(mglw.WindowConfig):
 
     def key_event(self, key, action, modifiers):
         keys = self.wnd.keys
+
+        for callback in self.keyboard_callbacks:
+            callback(keys, key, action, modifiers)
 
         self.camera.key_input(key, action, modifiers)
 
@@ -58,7 +63,8 @@ class ViewerWindow(mglw.WindowConfig):
 
 class Viewer(ViewerWindow):
 
-    drawers = []
+    draw_callbacks = []
+
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -67,7 +73,7 @@ class Viewer(ViewerWindow):
         self.axisrender = axisrender.AxisRender(self.ctx, 10)
         self.gridrender = gridrender.GridRender(self.ctx, 1000, 20)
 
-        for r in self.drawers:
+        for r in self.draw_callbacks:
             r.ctx = self.ctx
             r.resource_dir = self.resource_dir
             r.register()
@@ -84,7 +90,7 @@ class Viewer(ViewerWindow):
         m = np.eye(4, 4)
         self.axisrender.render(mvp, [m])
 
-        for r in self.drawers:
+        for r in self.draw_callbacks:
             r.render(self.camera, time, frametime)
 
 
@@ -103,7 +109,7 @@ class Draw(object):
 
 class CharacterDraw(Draw):
 
-    def __init__(self, drawSkeleton, vertices, indices, skinningindices, skinningweights, skeleton, animation):
+    def __init__(self, drawSkeleton, vertices, indices, skinningindices, skinningweights, skeleton, animation=None):
         super().__init__()
         self.drawSkeleton = drawSkeleton
         self.vertices = vertices
@@ -111,7 +117,7 @@ class CharacterDraw(Draw):
         self.skinningindices = skinningindices
         self.skinningweights = skinningweights
         self.skeleton = skeleton
-        self.animation = animation
+        self.animation = animation or []
 
     def register(self):
 
@@ -145,10 +151,10 @@ class CharacterDraw(Draw):
 
 class FootGroundDraw(Draw):
 
-    def __init__(self, skeleton, animation, leftfootcoloranimation=None, rightfootcoloranimation=None):
+    def __init__(self, skeleton, animation=None, leftfootcoloranimation=None, rightfootcoloranimation=None):
         super().__init__()
         self.skeleton = skeleton
-        self.animation = animation
+        self.animation = animation or []
         self.leftfootcoloranimation = leftfootcoloranimation
         self.rightfootcoloranimation = rightfootcoloranimation
 
@@ -169,12 +175,12 @@ class FootGroundDraw(Draw):
             bones = self.skeleton.initialpose
 
         self.ctx.enable_only(moderngl.DEPTH_TEST)
-        color = None
+        color = np.zeros(3)
         if self.leftfootcoloranimation is not None:
             color = self.leftfootcoloranimation[frame]
         self.groundfootrender.render(mvp, bones[self.skeleton.boneid('Model:LeftFoot')], color)
 
-        color = None
+        color = np.zeros(3)
         if self.rightfootcoloranimation is not None:
             color = self.rightfootcoloranimation[frame]
         self.groundfootrender.render(mvp, bones[self.skeleton.boneid('Model:RightFoot')], color)

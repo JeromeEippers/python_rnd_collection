@@ -99,6 +99,13 @@ def read_skeleton(pScene):
     skeleton.bindpose = skeleton.bindpose[:len(skeleton.bones), :, :]
     skeleton.initialpose = skeleton.initialpose[:len(skeleton.bones), :, :]
 
+    skeleton.parentlist = [bone.parent for bone in skeleton.bones]
+    skeleton.upleglength = np.linalg.norm(skeleton.initialpose[skeleton.boneid('Model:LeftUpLeg'), 3, :3]-skeleton.initialpose[skeleton.boneid('Model:LeftLeg'), 3, :3])
+    skeleton.leglength = np.linalg.norm(skeleton.initialpose[skeleton.boneid('Model:LeftLeg'), 3, :3]-skeleton.initialpose[skeleton.boneid('Model:LeftFoot'), 3, :3])
+    skeleton.hipsid = skeleton.boneid('Model:Hips')
+    skeleton.leftlegids = [skeleton.boneid('Model:LeftUpLeg'), skeleton.boneid('Model:LeftLeg'), skeleton.boneid('Model:LeftFoot')]
+    skeleton.rightlegids = [skeleton.boneid('Model:RightUpLeg'), skeleton.boneid('Model:RightLeg'), skeleton.boneid('Model:RightFoot')]
+
     return skeleton
 
 
