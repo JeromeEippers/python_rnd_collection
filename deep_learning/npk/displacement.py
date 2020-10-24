@@ -2,15 +2,6 @@ import numpy as np
 import posquat as pq
 
 
-def cross(a, b):
-    """Compute a cross product for a list of vectors"""
-    return np.concatenate([
-        a[..., 1:2] * b[..., 2:3] - a[..., 2:3] * b[..., 1:2],
-        a[..., 2:3] * b[..., 0:1] - a[..., 0:1] * b[..., 2:3],
-        a[..., 0:1] * b[..., 1:2] - a[..., 1:2] * b[..., 0:1],
-    ], axis=-1)
-
-
 def update_matrix_anim_projecting_disp_on_ground(anim):
     """
     project displacement on the ground from the hips
@@ -25,8 +16,8 @@ def update_matrix_anim_projecting_disp_on_ground(anim):
     eye = np.repeat(eye[np.newaxis, ...], len(anim[0]), axis=0)
     eye = np.repeat(eye[np.newaxis, ...], len(anim), axis=0)
 
-    y = cross(anim[:, 0, 2, :3], eye[:, 0, 1, :3])
-    x = cross(y, eye[:, 0, 1, :3])
+    y = pq.vec_cross3(anim[:, 0, 2, :3], eye[:, 0, 1, :3])
+    x = pq.vec_cross3(y, eye[:, 0, 1, :3])
 
     anim[:, 0, 0, :3] = x
     anim[:, 0, 1, :3] = y

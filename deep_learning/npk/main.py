@@ -2,6 +2,7 @@ from pathlib import Path
 import pickle
 import numpy as np
 import posquat as pq
+import copy
 
 from viewer import viewer
 import fbxreader
@@ -129,10 +130,19 @@ def _keyboard(keys, key, action, modifiers):
             currentAnim += 1
         if key == keys.LEFT:
             currentAnim += -1
-        currentAnim = currentAnim % len(animations[0])
+        currentAnim = currentAnim % len(animations)
 
         print(('Switch to animation', currentAnim))
         anim = animations[currentAnim]
+
+        #test ik
+        hipsP, hipsQ = copy.deepcopy(anim[0][...,skeleton.hipsid,:]), copy.deepcopy(anim[1][...,skeleton.hipsid,:])
+        leftP, leftQ = anim[0][...,skeleton.leftlegids[-1],:], anim[1][...,skeleton.leftlegids[-1],:]
+        rightP, rightQ = anim[0][..., skeleton.rightlegids[-1], :], anim[1][..., skeleton.rightlegids[-1], :]
+
+        hipsP[..., 1] -= 20
+
+        anim = skeleton.foot_ik( (hipsP, hipsQ), (leftP, leftQ), (rightP, rightQ), globalpose=anim )
 
         foot_draw.leftfootcoloranimation = compute_foot_contact_colors(skeleton, anim, 'Model:LeftFoot', 20)
         foot_draw.rightfootcoloranimation = compute_foot_contact_colors(skeleton, anim, 'Model:RightFoot', 20)

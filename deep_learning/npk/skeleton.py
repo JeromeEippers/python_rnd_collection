@@ -19,7 +19,7 @@ class Skeleton(object):
         self.upleglength = 0
         self.leglength = 0
         self.hipsid = 0
-        self.leftlegids = [0,0,0]
+        self.leftlegids = [0, 0, 0]
         self.rightlegids = [0, 0, 0]
 
     def local_to_global(self, localpose):
@@ -38,7 +38,7 @@ class Skeleton(object):
                 (pos[..., i, :], quat[..., i, :]),
                 (gpos[..., self.parentlist[i], :], gquat[..., self.parentlist[i], :])
             )
-        return gpos, gquat
+        return gpos, pq.vec_normalize(gquat)
 
     def global_to_local(self, globalpose):
         """compute a global pose or global animation out of a local pose"""
@@ -48,69 +48,87 @@ class Skeleton(object):
         pos = np.zeros_like(gpos)
         quat = np.zeros_like(gquat)
 
-        #root is not converted
+        # root is not converted
         pos[..., 0, :] = gpos[..., 0, :]
         quat[..., 0, :] = gquat[..., 0, :]
 
-        #multiply by the inverse parent
+        # multiply by the inverse parent
         pos[..., 1:, :], quat[..., 1:, :] = pq.mult(
             (gpos[..., 1:, :], gquat[..., 1:, :]),
             (ipose[..., self.parentlist[1:], :], iquat[..., self.parentlist[1:], :])
         )
-        return pos, quat
+        return pos, pq.vec_normalize(quat)
 
-    def foot_ik(self, localpose, hips, leftfoot, rightfoot):
-        raise NotImplemented()
-        # this is still assuming matrix pose and one pose at a time
+    def foot_ik(self, hips, leftfoot, rightfoot, globalpose=None):
 
-        pose = copy.deepcopy(localpose)
-        pose[self.hipsid, :, :] = np.dot(hips, np.linalg.inv(localpose[0, :, :]))  # always direct child of root (root is always global)
+        pos_augmentation = np.ones_like(hips[0][..., 0, 0, np.newaxis].repeat(3, axis=-1))
+        quat_augmentation = np.ones_like(hips[1][..., 0, 0, np.newaxis].repeat(4, axis=-1))
 
-        def _compute_leg(legIds, start_effector, end_effector):
-            middle = ((end_effector[3, :3] - start_effector[3, :3])/(self.upleglength + self.leglength)) * self.upleglength
-            middle_len = np.linalg.norm(middle)
-            up_len = 0.0
-            if middle_len < self.upleglength:
-                up_len = np.sqrt(self.upleglength*self.upleglength - middle_len*middle_len)
-            up_pos = start_effector[3, :3] + middle + start_effector[1, :3] * up_len
+        y_vectors = np.array([0, 1, 0]) * pos_augmentation
 
-            start = np.eye(4)
-            start[0, :3] = up_pos - start_effector[3, :3]
-            start[0, :3] /= np.linalg.norm(start[0, :3])
-            start[2, :3] = np.cross(start[0, :3], start_effector[1, :3])
-            start[2, :3] /= np.linalg.norm(start[2, :3])
-            start[1, :3] = np.cross(start[2, :3], start[0, :3])
-            start[1, :3] /= np.linalg.norm(start[1, :3])
-            start[3, :3] = start_effector[3, :3]
+        if globalpose is None:
+            gpos, gquat = pq.pose_to_pq(self.initialpose)
+            gpos = gpos * pos_augmentation
+            gquat = gquat * quat_augmentation
+            globalpose = (gpos, gquat)
 
-            middle = np.eye(4)
-            middle[0, :3] = end_effector[3, :3] - up_pos
-            middle[0, :3] /= np.linalg.norm(middle[0, :3])
-            middle[2, :3] = np.cross(middle[0, :3], start_effector[1, :3])
-            middle[2, :3] /= np.linalg.norm(middle[2, :3])
-            middle[1, :3] = np.cross(middle[2, :3], middle[0, :3])
-            middle[1, :3] /= np.linalg.norm(middle[1, :3])
-            middle[3, :3] = up_pos
+        localpose = self.global_to_local(globalpose)
 
-            return start, middle
+        gpos, gquat = globalpose
+        lpos, lquat = localpose
 
-        #globalposes
-        leftUpLeg = np.dot(localpose[self.leftlegids[0], :, :], hips)
-        leftUpLeg, leftLeg = _compute_leg(self.leftlegids, leftUpLeg, leftfoot)
-        #localposes
-        pose[self.leftlegids[2], :, :] = np.dot(leftfoot, np.linalg.inv(leftLeg))
-        pose[self.leftlegids[1], :, :] = np.dot(leftLeg, np.linalg.inv(leftUpLeg))
-        pose[self.leftlegids[0], :, :] = np.dot(leftUpLeg, np.linalg.inv(hips))
+        # set the hips in local were we want it (hips is always child of root)
+        lpos[..., self.hipsid, :], lquat[..., self.hipsid, :] = \
+            pq.mult(hips, pq.inv(positions=gpos[..., 0, :], quaternions=gquat[..., 0, :]))
 
-        # globalposes
-        rightUpLeg = np.dot(localpose[self.rightlegids[0], :, :], hips)
-        rightUpLeg, rightLeg = _compute_leg(self.rightlegids, rightUpLeg, rightfoot)
-        # localposes
-        pose[self.rightlegids[2], :, :] = np.dot(rightfoot, np.linalg.inv(rightLeg))
-        pose[self.rightlegids[1], :, :] = np.dot(rightLeg, np.linalg.inv(rightUpLeg))
-        pose[self.rightlegids[0], :, :] = np.dot(rightUpLeg, np.linalg.inv(hips))
+        # recompute globals
+        gpos, gquat = self.local_to_global((lpos, lquat))
 
-        return pose
+        def _compute_leg(start_pos, end_pos, pole_dir):
+            middle = ((end_pos - start_pos)/(self.upleglength + self.leglength)) * self.upleglength
+            middle_len = np.sum(middle * middle, axis=-1, keepdims=True)
+            up_len = np.zeros_like(middle_len)
+            sqrt_up_length = self.upleglength * self.upleglength
+            up_len = np.where(middle_len < sqrt_up_length, np.sqrt(sqrt_up_length - middle_len), up_len)
+            up_pos = start_pos + middle + pole_dir * up_len
+
+            start_quat = pq.quat_from_lookat(up_pos - start_pos, pole_dir)
+            middle_quat = pq.quat_from_lookat(end_pos - up_pos, pole_dir)
+
+            return start_quat, middle_quat, up_pos
+
+        # compute legs
+        start_quat, middle_quat, middle_pos = _compute_leg(
+            gpos[..., self.leftlegids[0], :],
+            leftfoot[0],
+            pq.quat_mul_vec(gquat[..., self.leftlegids[0], :], y_vectors)
+        )
+        gquat[..., self.leftlegids[0], :] = start_quat
+        gquat[..., self.leftlegids[1], :] = middle_quat
+        gpos[..., self.leftlegids[1], :] = middle_pos
+        gpos[..., self.leftlegids[2], :] = leftfoot[0]
+        gquat[..., self.leftlegids[2], :] = leftfoot[1]
+        gpos[..., self.leftlegids[2]+1, :], gquat[..., self.leftlegids[2]+1, :] = pq.mult(
+            (lpos[..., self.leftlegids[2] + 1, :], lquat[..., self.leftlegids[2] + 1, :]),
+            (gpos[..., self.leftlegids[2], :], gquat[..., self.leftlegids[2], :])
+        )
+
+        start_quat, middle_quat, middle_pos = _compute_leg(
+            gpos[..., self.rightlegids[0], :],
+            rightfoot[0],
+            pq.quat_mul_vec(gquat[..., self.rightlegids[0], :], y_vectors)
+        )
+        gquat[..., self.rightlegids[0], :] = start_quat
+        gquat[..., self.rightlegids[1], :] = middle_quat
+        gpos[..., self.rightlegids[1], :] = middle_pos
+        gpos[..., self.rightlegids[2], :] = rightfoot[0]
+        gquat[..., self.rightlegids[2], :] = rightfoot[1]
+        gpos[..., self.rightlegids[2] + 1, :], gquat[..., self.rightlegids[2] + 1, :] = pq.mult(
+            (lpos[..., self.rightlegids[2] + 1, :], lquat[..., self.rightlegids[2] + 1, :]),
+            (gpos[..., self.rightlegids[2], :], gquat[..., self.rightlegids[2], :])
+        )
+
+        return gpos, gquat
 
     def boneid(self, name):
         for i in range(len(self.bones)):

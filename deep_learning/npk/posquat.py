@@ -2,7 +2,16 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 
 
-def _quat_mul(x, y):
+def vec_cross3(a, b):
+    """Compute a cross product for a list of vectors"""
+    return np.concatenate([
+        a[..., 1:2] * b[..., 2:3] - a[..., 2:3] * b[..., 1:2],
+        a[..., 2:3] * b[..., 0:1] - a[..., 0:1] * b[..., 2:3],
+        a[..., 0:1] * b[..., 1:2] - a[..., 1:2] * b[..., 0:1],
+    ], axis=-1)
+
+
+def quat_mul(x, y):
     x0, x1, x2, x3 = x[..., 0:1], x[..., 1:2], x[..., 2:3], x[..., 3:4]
     y0, y1, y2, y3 = y[..., 0:1], y[..., 1:2], y[..., 2:3], y[..., 3:4]
 
@@ -13,41 +22,43 @@ def _quat_mul(x, y):
         y0 * x3 - y1 * x2 + y2 * x1 + y3 * x0], axis=-1)
 
 
-def _quat_mul_vec(quaternions, vectors):
+def quat_mul_vec(quaternions, vectors):
     q2 = np.zeros_like(quaternions)
     q2[..., 1:] = vectors
 
     return (
-        (_quat_mul(_quat_conj(quaternions), _quat_mul(q2, quaternions)))[..., 1:]
+        (quat_mul(quat_conj(quaternions), quat_mul(q2, quaternions)))[..., 1:]
     )
 
 
-def _quat_conj(x):
+def quat_conj(x):
     return np.array([1, -1, -1, -1], dtype=np.float32) * x
 
-def _quat_flip(x):
+
+def quat_flip(x):
     return np.array([-1, -1, -1, -1], dtype=np.float32) * x
 
-def _quat_slerp(x, y, a, eps=1e-10):
-    y = np.where((np.sum(x * y, axis=-1) < 0)[..., np.newaxis].repeat(4, axis=-1), _quat_flip(y), y)
+
+def quat_slerp(x, y, a, eps=1e-10):
+    y = np.where((np.sum(x * y, axis=-1) < 0)[..., np.newaxis].repeat(4, axis=-1), quat_flip(y), y)
 
     l = np.sum(x * y, axis=-1)
     o = np.arccos(np.clip(l, -1.0, 1.0))
-    a0 = np.sin((1.0-a) * o) / (np.sin(o) + eps)
-    a1 = np.sin((    a) * o) / (np.sin(o) + eps)
-    return a0[...,np.newaxis] * x + a1[...,np.newaxis] * y
+    a0 = np.sin((1.0 - a) * o) / (np.sin(o) + eps)
+    a1 = np.sin((a) * o) / (np.sin(o) + eps)
+    return a0[..., np.newaxis] * x + a1[..., np.newaxis] * y
 
 
-def _quat_normalize(x, eps=0.0):
-    return x / (np.sqrt(np.sum(x*x, axis=-1, keepdims=True)) + eps)
+def vec_normalize(x, eps=0.0):
+    return x / (np.sqrt(np.sum(x * x, axis=-1, keepdims=True)) + eps)
 
 
-def _quat_lerp(a, b, t):
-    b = np.where((np.sum(b * a, axis=-1) < 0)[..., np.newaxis].repeat(4, axis=-1), _quat_flip(b), b)
-    return _quat_normalize(a * (1.0 - t) + b * t)
+def quat_lerp(a, b, t):
+    b = np.where((np.sum(b * a, axis=-1) < 0)[..., np.newaxis].repeat(4, axis=-1), quat_flip(b), b)
+    return vec_normalize(a * (1.0 - t) + b * t)
 
 
-def _quat_to_m(x):
+def quat_to_m33(x):
     qw, qx, qy, qz = x[..., 0:1], x[..., 1:2], x[..., 2:3], x[..., 3:4]
 
     x2, y2, z2 = qx + qx, qy + qy, qz + qz
@@ -62,7 +73,7 @@ def _quat_to_m(x):
     ], axis=-2)
 
 
-def _m_to_quat(ts, eps=1e-10):
+def m33_to_quat(ts, eps=1e-10):
     qs = np.empty_like(ts[..., :1, 0].repeat(4, axis=-1))
 
     t = ts[..., 0, 0] + ts[..., 1, 1] + ts[..., 2, 2]
@@ -105,12 +116,23 @@ def _m_to_quat(ts, eps=1e-10):
     return qs
 
 
-def _pos_flip(x):
+def quat_from_lookat(aim, up):
+    matrices = np.zeros([3, 3]) * np.ones_like(aim[..., :1, np.newaxis].repeat(3, axis=-1))
+    x = vec_normalize(aim)
+    z = vec_normalize(vec_cross3(x, up))
+    y = vec_normalize(vec_cross3(z, x))
+    matrices[..., 0, :] = x
+    matrices[..., 1, :] = y
+    matrices[..., 2, :] = z
+    return m33_to_quat(matrices)
+
+
+def vec3_flip(x):
     return np.array([-1, -1, -1], dtype=np.float32) * x
 
 
 def pose_to_pq(pose):
-    quaternions = _m_to_quat(pose[..., :3, :3])
+    quaternions = m33_to_quat(pose[..., :3, :3])
     positions = pose[..., 3, :3]
     return positions, quaternions
 
@@ -119,7 +141,7 @@ def pq_to_pose(pqs=None, positions=None, quaternions=None):
     if pqs is not None:
         positions, quaternions = pqs
     matrices = np.eye(4, dtype=np.float32) * np.ones_like(positions[..., :1, np.newaxis].repeat(4, axis=-1))
-    matrices[..., :3, :3] = _quat_to_m(quaternions)
+    matrices[..., :3, :3] = quat_to_m33(quaternions)
     matrices[..., 3, :3] = positions
     return matrices
 
@@ -127,21 +149,21 @@ def pq_to_pose(pqs=None, positions=None, quaternions=None):
 def inv(pqs=None, positions=None, quaternions=None):
     if pqs is not None:
         positions, quaternions = pqs
-    qs = _quat_conj(quaternions)
-    ps = _pos_flip(positions)
-    return _quat_mul_vec(qs, ps), qs
+    qs = quat_conj(quaternions)
+    ps = vec3_flip(positions)
+    return quat_mul_vec(qs, ps), qs
 
 
 def mult(a, b):
-    positions = _quat_mul_vec(b[1], a[0])
+    positions = quat_mul_vec(b[1], a[0])
     positions += b[0]
-    quaternions = _quat_mul(a[1], b[1])
+    quaternions = quat_mul(a[1], b[1])
     return positions, quaternions
 
 
 def lerp(a, b, t):
-    positions = a[0] * (1.0-t) + b[0] * t
-    quaternions = _quat_slerp(a[1], b[1], t)
+    positions = a[0] * (1.0 - t) + b[0] * t
+    quaternions = quat_slerp(a[1], b[1], t)
     return positions, quaternions
 
 
@@ -150,8 +172,6 @@ def __take_one_pq(pqs, index, as_array=True):
     if as_array:
         return positions[index][np.newaxis, ...], quaternions[index][np.newaxis, ...]
     return positions[index], quaternions[index]
-
-
 
 
 def _tests_():
@@ -188,4 +208,4 @@ def _tests_():
     # more dimensions
     pq = pose_to_pq(a_b[np.newaxis, ...])
     identities = pq_to_pose(mult(pq, inv(pq)))
-    assert(np.allclose(identities, np.eye(4, dtype=np.float32) * np.ones([1,2,1,1])))
+    assert (np.allclose(identities, np.eye(4, dtype=np.float32) * np.ones([1, 2, 1, 1])))
