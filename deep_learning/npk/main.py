@@ -8,6 +8,8 @@ from viewer import viewer
 import fbxreader
 import displacement as disp
 import transform as tr
+import augmentation as augment
+
 
 
 resource_dir = Path(__file__).parent.resolve() / 'resources'
@@ -105,13 +107,13 @@ animations = [disp.reset_displacement_origin(skeleton, anim) for anim in animati
 # TEST LERP
 pos, quat = skeleton.global_to_local(animations[0])
 
-npos = np.zeros([60,24,3])
-nquat = np.zeros([60,24,4])
+pos, quat = augment.warp(
+    skeleton,
+    animations[4],
+    (animations[4][0][0,...], animations[4][1][0,...]),
+    (animations[4][0][0,...], animations[4][1][0,...])
+)
 
-for i in range(60):
-    npos[i,...], nquat[i,...] = pq.lerp( (pos[0], quat[0]), (pos[50], quat[50]), float(i)/60 )
-
-pos, quat = skeleton.local_to_global((npos, nquat))
 animations = [(pos, quat)] + animations
 
 
@@ -134,15 +136,6 @@ def _keyboard(keys, key, action, modifiers):
 
         print(('Switch to animation', currentAnim))
         anim = animations[currentAnim]
-
-        #test ik
-        hipsP, hipsQ = copy.deepcopy(anim[0][...,skeleton.hipsid,:]), copy.deepcopy(anim[1][...,skeleton.hipsid,:])
-        leftP, leftQ = anim[0][...,skeleton.leftlegids[-1],:], anim[1][...,skeleton.leftlegids[-1],:]
-        rightP, rightQ = anim[0][..., skeleton.rightlegids[-1], :], anim[1][..., skeleton.rightlegids[-1], :]
-
-        hipsP[..., 1] -= 20
-
-        anim = skeleton.foot_ik( (hipsP, hipsQ), (leftP, leftQ), (rightP, rightQ), globalpose=anim )
 
         foot_draw.leftfootcoloranimation = compute_foot_contact_colors(skeleton, anim, 'Model:LeftFoot', 20)
         foot_draw.rightfootcoloranimation = compute_foot_contact_colors(skeleton, anim, 'Model:RightFoot', 20)

@@ -160,6 +160,15 @@ def mult(a, b):
     quaternions = quat_mul(a[1], b[1])
     return positions, quaternions
 
+def sub(a, b):
+    positions = a[0] - b[0]
+    quaternions = quat_mul(quat_conj(b[1]), a[1])
+    return positions, quaternions
+
+def add(a, b):
+    positions = a[0] + b[0]
+    quaternions = quat_mul(a[1], b[1])
+    return positions, quaternions
 
 def lerp(a, b, t):
     positions = a[0] * (1.0 - t) + b[0] * t
