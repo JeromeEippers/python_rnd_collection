@@ -33,15 +33,15 @@ def warp(skel : skeleton.Skeleton, anim, startpose, endpose):
         trf += rfspeed[f] / totlarf
 
         loffset = pq.lerp(lstartoffset, lendoffset, t)
-        lpos[f, ...], lquat[f, ...] = pq.add(loffset, (lpos[f, ...], lquat[f, ...]))
+        lpos[f, ...], lquat[f, ...] = pq.add((lpos[f, ...], lquat[f, ...]), loffset)
 
         goffh = pq.lerp((gsp[0], gsq[0]), (gep[0], geq[0]), th)
         gofflf = pq.lerp((gsp[1], gsq[1]), (gep[1], geq[1]), tlf)
         goffrf = pq.lerp((gsp[2], gsq[2]), (gep[2], geq[2]), trf)
 
-        npos[f, indices[0], ...], nquat[f, indices[0], ...] = pq.add(goffh, (gpos[f, indices[0], ...], gquat[f, indices[0], ...]))
-        npos[f, indices[1], ...], nquat[f, indices[1], ...] = pq.add(gofflf, (gpos[f, indices[1], ...], gquat[f, indices[1], ...]))
-        npos[f, indices[2], ...], nquat[f, indices[2], ...] = pq.add(goffrf, (gpos[f, indices[2], ...], gquat[f, indices[2], ...]))
+        npos[f, indices[0], ...], nquat[f, indices[0], ...] = pq.add((gpos[f, indices[0], ...], gquat[f, indices[0], ...]), goffh)
+        npos[f, indices[1], ...], nquat[f, indices[1], ...] = pq.add((gpos[f, indices[1], ...], gquat[f, indices[1], ...]), gofflf)
+        npos[f, indices[2], ...], nquat[f, indices[2], ...] = pq.add((gpos[f, indices[2], ...], gquat[f, indices[2], ...]), goffrf)
 
 
     gpos, gquat = skel.local_to_global((lpos, lquat))
@@ -52,3 +52,15 @@ def warp(skel : skeleton.Skeleton, anim, startpose, endpose):
         (npos[..., skel.rightlegids[-1], :], nquat[..., skel.rightlegids[-1], :]),
         (gpos, gquat)
     )
+
+
+def stretch_displacement(skel : skeleton.Skeleton, anim, pos, quat):
+    startpose = anim[0][0, ...], anim[1][0, ...]
+    endpose = anim[0][-1, ...], anim[1][-1, ...]
+
+    endpose = skel.global_to_local(endpose)
+    endpose[0][0,...] += pos
+    endpose[1][0, ...] = pq.quat_mul(quat, endpose[1][0, ...])
+    endpose = skel.local_to_global(endpose)
+    return warp(skel, anim, startpose, endpose)
+

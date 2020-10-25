@@ -40,6 +40,8 @@ def quat_flip(x):
 
 
 def quat_slerp(x, y, a, eps=1e-10):
+    # WARNING CANNOT SLERP IDENTITY WITH IDENTITY
+
     y = np.where((np.sum(x * y, axis=-1) < 0)[..., np.newaxis].repeat(4, axis=-1), quat_flip(y), y)
 
     l = np.sum(x * y, axis=-1)
@@ -47,6 +49,17 @@ def quat_slerp(x, y, a, eps=1e-10):
     a0 = np.sin((1.0 - a) * o) / (np.sin(o) + eps)
     a1 = np.sin((a) * o) / (np.sin(o) + eps)
     return a0[..., np.newaxis] * x + a1[..., np.newaxis] * y
+
+
+def quat_from_angle_axis(angle, axis):
+    x, y, z = axis[..., 0:1], axis[..., 1:2], axis[..., 2:3]
+    theta = angle/2
+    sintheta = np.ones_like(x[..., 0])[...,np.newaxis] * np.sin(theta)
+    return np.concatenate([
+        np.ones_like(x[..., 0])[...,np.newaxis] * np.cos(theta),
+        x * sintheta,
+        y * sintheta,
+        z * sintheta], axis=-1)
 
 
 def vec_normalize(x, eps=0.0):
@@ -172,7 +185,7 @@ def add(a, b):
 
 def lerp(a, b, t):
     positions = a[0] * (1.0 - t) + b[0] * t
-    quaternions = quat_slerp(a[1], b[1], t)
+    quaternions = quat_lerp(a[1], b[1], t)
     return positions, quaternions
 
 

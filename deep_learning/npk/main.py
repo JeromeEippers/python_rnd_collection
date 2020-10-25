@@ -54,35 +54,7 @@ def compute_foot_contact_colors(skel, anim, bonename, speedlimit=15):
     return contactcolors
 
 
-def split_animation_by_foot_ground_contacts(skel, anim, speedlimit=15):
-    # generate foot speed
-    leftfootspeed = tr.compute_bone_speed(skel, anim, 'Model:LeftFoot')
-    rightfootspeed = tr.compute_bone_speed(skel, anim, 'Model:RightFoot')
 
-    # splits
-    ranges = np.concatenate(np.argwhere((leftfootspeed <= speedlimit) & (rightfootspeed <= speedlimit)))
-    splits = []
-    currentbegin = ranges[0]
-    lastindex = ranges[0]
-    for r in ranges[1:]:
-        if r > lastindex + 1:
-            if lastindex - currentbegin > 10:
-                splits.append(int(currentbegin + (lastindex - currentbegin) / 2))
-            currentbegin = r
-        lastindex = r
-
-    ps, qs = anim
-    list_of_animations = []
-    for s in range(len(splits) - 1):
-        list_of_animations.append((
-            ps[splits[s]:splits[s + 1], ...],
-            qs[splits[s]:splits[s + 1], ...]
-        ))
-    list_of_animations.append((
-        ps[splits[-1]:, ...],
-        qs[splits[-1]:, ...]
-    ))
-    return list_of_animations
 
 
 vertices, indices, skinningindices, skinningweights, skeleton = pickle.load(
@@ -100,11 +72,17 @@ animations = [disp.reset_displacement(skeleton, animations[15])]
 animations += [disp.mirror_animation(animations[0])]
 '''
 
-animation = pq.pose_to_pq(pickle.load(open(str(resource_dir / 'side_steps.dump'), 'rb')))
-animations = split_animation_by_foot_ground_contacts(skeleton, animation, 15)
+animation = pq.pose_to_pq(pickle.load(open(str(resource_dir / 'turn_steps.dump'), 'rb')))
+#animation = tr.lock_feet(skeleton, animation, 5)
+animations = tr.split_animation_by_foot_ground_contacts(skeleton, animation, 20)
 animations = [disp.reset_displacement_origin(skeleton, anim) for anim in animations]
 
-# TEST LERP
+animation = pq.pose_to_pq(pickle.load(open(str(resource_dir / 'side_steps.dump'), 'rb')))
+#animation = tr.lock_feet(skeleton, animation, 15)
+animations2 = tr.split_animation_by_foot_ground_contacts(skeleton, animation, 15)
+animations += [disp.reset_displacement_origin(skeleton, anim) for anim in animations2]
+
+'''
 pos, quat = skeleton.global_to_local(animations[0])
 
 pos, quat = augment.warp(
@@ -115,7 +93,7 @@ pos, quat = augment.warp(
 )
 
 animations = [(pos, quat)] + animations
-
+'''
 
 # RENDERING ###############
 currentAnim = -1
@@ -123,7 +101,7 @@ foot_draw = viewer.FootGroundDraw(skeleton)
 char_draw = viewer.CharacterDraw(True, vertices, indices, skinningindices, skinningweights, skeleton)
 
 
-def _keyboard(keys, key, action, modifiers):
+def _keyboard(viewer, keys, key, action, modifiers):
     global currentAnim
     global foot_draw
     global char_draw
@@ -133,9 +111,14 @@ def _keyboard(keys, key, action, modifiers):
         if key == keys.LEFT:
             currentAnim += -1
         currentAnim = currentAnim % len(animations)
+        viewer.reset_timer()
 
         print(('Switch to animation', currentAnim))
         anim = animations[currentAnim]
+
+        # test tweaks
+        rot = pq.quat_from_angle_axis(np.array([20 * 3.1415 / 180]), np.array([[0,0,1]]))
+        anim = augment.stretch_displacement(skeleton, anim, np.array([0,0,0]), rot[0])
 
         foot_draw.leftfootcoloranimation = compute_foot_contact_colors(skeleton, anim, 'Model:LeftFoot', 20)
         foot_draw.rightfootcoloranimation = compute_foot_contact_colors(skeleton, anim, 'Model:RightFoot', 20)

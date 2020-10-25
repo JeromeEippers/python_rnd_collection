@@ -30,7 +30,7 @@ class ViewerWindow(mglw.WindowConfig):
         keys = self.wnd.keys
 
         for callback in self.keyboard_callbacks:
-            callback(keys, key, action, modifiers)
+            callback(self, keys, key, action, modifiers)
 
         self.camera.key_input(key, action, modifiers)
 
@@ -73,13 +73,22 @@ class Viewer(ViewerWindow):
         self.axisrender = axisrender.AxisRender(self.ctx, 10)
         self.gridrender = gridrender.GridRender(self.ctx, 1000, 20)
 
+        # offset timer
+        self.internalTimer = 0
+
         for r in self.draw_callbacks:
             r.ctx = self.ctx
             r.resource_dir = self.resource_dir
             r.register()
 
 
+    def reset_timer(self):
+        self.internalTimer = 0
+
+
     def render(self, time: float, frametime: float):
+
+        self.internalTimer += frametime
 
         self.ctx.enable_only(moderngl.DEPTH_TEST | moderngl.CULL_FACE)
         self.ctx.clear(0.6,0.6,0.6)
@@ -91,7 +100,7 @@ class Viewer(ViewerWindow):
         self.axisrender.render(mvp, [m])
 
         for r in self.draw_callbacks:
-            r.render(self.camera, time, frametime)
+            r.render(self.camera, self.internalTimer, frametime)
 
 
 class Draw(object):
