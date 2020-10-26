@@ -6,9 +6,11 @@ import copy
 
 from viewer import viewer
 import fbxreader
+import skeleton
 import displacement as disp
 import transform as tr
 import augmentation as augment
+import importanimations as IN
 
 
 
@@ -46,11 +48,11 @@ with open(str(resource_dir / 'turn_steps.dump'), 'wb') as f:
 '''
 
 
-def compute_foot_contact_colors(skel, anim, bonename, speedlimit=15):
+def compute_foot_contact_colors(skel:skeleton.Skeleton, anim, bonename):
     # generate foot speed
-    footspeed = tr.compute_bone_speed(skel, anim, bonename)
+    is_static = tr.is_foot_static(anim[0][..., skel.boneid(bonename),:])
     contactcolors = np.repeat(np.zeros(3)[np.newaxis, ...], len(anim[0]), axis=0)
-    contactcolors[footspeed < speedlimit] = np.array([1, 0, 0])
+    contactcolors[is_static > 0.5] = np.array([1, 0, 0])
     return contactcolors
 
 
@@ -60,27 +62,7 @@ def compute_foot_contact_colors(skel, anim, bonename, speedlimit=15):
 vertices, indices, skinningindices, skinningweights, skeleton = pickle.load(
     open(str(resource_dir / 'simplified_man_average.dump'), 'rb'))
 
-'''
-animation = pickle.load(open(str(resource_dir / 'side_steps.dump'), 'rb'))
-animations = split_animation_by_foot_ground_contacts(skeleton, animation, 15)
-
-animation = pickle.load(open(str(resource_dir / 'turn_steps.dump'), 'rb'))
-animations += split_animation_by_foot_ground_contacts(skeleton, animation, 20)
-
-
-animations = [disp.reset_displacement(skeleton, animations[15])]
-animations += [disp.mirror_animation(animations[0])]
-'''
-
-animation = pq.pose_to_pq(pickle.load(open(str(resource_dir / 'turn_steps.dump'), 'rb')))
-#animation = tr.lock_feet(skeleton, animation, 5)
-animations = tr.split_animation_by_foot_ground_contacts(skeleton, animation, 20)
-animations = [disp.reset_displacement_origin(skeleton, anim) for anim in animations]
-
-animation = pq.pose_to_pq(pickle.load(open(str(resource_dir / 'side_steps.dump'), 'rb')))
-#animation = tr.lock_feet(skeleton, animation, 15)
-animations2 = tr.split_animation_by_foot_ground_contacts(skeleton, animation, 15)
-animations += [disp.reset_displacement_origin(skeleton, anim) for anim in animations2]
+animations = IN.get_raw_animations(skeleton)
 
 '''
 pos, quat = skeleton.global_to_local(animations[0])
@@ -117,11 +99,13 @@ def _keyboard(viewer, keys, key, action, modifiers):
         anim = animations[currentAnim]
 
         # test tweaks
-        rot = pq.quat_from_angle_axis(np.array([20 * 3.1415 / 180]), np.array([[0,0,1]]))
-        anim = augment.stretch_displacement(skeleton, anim, np.array([0,0,0]), rot[0])
+        #rot = pq.quat_from_angle_axis(np.array([20 * 3.1415 / 180]), np.array([[0,0,1]]))
+        #anim = augment.offset_displacement_at_end(skeleton, anim, np.array([0, 0, 0]), rot[0])
 
-        foot_draw.leftfootcoloranimation = compute_foot_contact_colors(skeleton, anim, 'Model:LeftFoot', 20)
-        foot_draw.rightfootcoloranimation = compute_foot_contact_colors(skeleton, anim, 'Model:RightFoot', 20)
+        #anim = augment.scale_displacement(skeleton, anim, .5, 0.5)
+
+        foot_draw.leftfootcoloranimation = compute_foot_contact_colors(skeleton, anim, 'Model:LeftFoot')
+        foot_draw.rightfootcoloranimation = compute_foot_contact_colors(skeleton, anim, 'Model:RightFoot')
 
         anim = pq.pq_to_pose(anim)
         foot_draw.animation = anim

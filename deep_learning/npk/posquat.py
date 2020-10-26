@@ -62,6 +62,38 @@ def quat_from_angle_axis(angle, axis):
         z * sintheta], axis=-1)
 
 
+def quat_average(Q, weights=None):
+        '''
+        Averaging Quaternions.
+
+        Arguments:
+            Q(ndarray): an Mx4 ndarray of quaternions.
+            weights(list): an M elements list, a weight for each quaternion.
+        '''
+
+        # TODO does not support multidimension at this point
+
+        # Form the symmetric accumulator matrix
+        A = np.zeros((4, 4))
+        M = Q.shape[0]
+        wSum = 0
+
+        if weights is None:
+            weights = np.ones(M)
+
+        for i in range(M):
+            q = Q[i, :]
+            w_i = weights[i]
+            A += w_i * (np.outer(q, q))  # rank 1 update
+            wSum += w_i
+
+        # scale
+        A /= wSum
+
+        # Get the eigenvector corresponding to largest eigen value
+        return np.linalg.eigh(A)[1][:, -1]
+
+
 def vec_normalize(x, eps=0.0):
     return x / (np.sqrt(np.sum(x * x, axis=-1, keepdims=True)) + eps)
 
@@ -187,6 +219,11 @@ def lerp(a, b, t):
     positions = a[0] * (1.0 - t) + b[0] * t
     quaternions = quat_lerp(a[1], b[1], t)
     return positions, quaternions
+
+
+def transform_point(pqs, positions):
+    pos = quat_mul_vec(pqs[1], positions)
+    return pos + pqs[0]
 
 
 def __take_one_pq(pqs, index, as_array=True):

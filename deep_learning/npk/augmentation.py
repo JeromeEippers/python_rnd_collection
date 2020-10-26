@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 import posquat as pq
 import transform as tr
@@ -54,13 +56,42 @@ def warp(skel : skeleton.Skeleton, anim, startpose, endpose):
     )
 
 
-def stretch_displacement(skel : skeleton.Skeleton, anim, pos, quat):
+def offset_displacement_at_end(skel:skeleton.Skeleton, anim, dispPositionOffset, dispQuaternionOffset):
     startpose = anim[0][0, ...], anim[1][0, ...]
     endpose = anim[0][-1, ...], anim[1][-1, ...]
 
     endpose = skel.global_to_local(endpose)
-    endpose[0][0,...] += pos
-    endpose[1][0, ...] = pq.quat_mul(quat, endpose[1][0, ...])
+    endpose[0][0,...] += dispPositionOffset
+    endpose[1][0, ...] = pq.quat_mul(dispQuaternionOffset, endpose[1][0, ...])
     endpose = skel.local_to_global(endpose)
     return warp(skel, anim, startpose, endpose)
 
+
+def scale_displacement(skel:skeleton.Skeleton, anim, positionScale=1.0, quaternionScale=1.0):
+    startpose = anim[0][0, ...], anim[1][0, ...]
+    endpose = anim[0][-1, ...], anim[1][-1, ...]
+
+    endpose = skel.global_to_local(endpose)
+    endposeP, _ = pq.lerp( (startpose[0][0, ...], startpose[1][0, ...]), (endpose[0][0, ...], endpose[1][0, ...]), positionScale)
+    _, endposeQ = pq.lerp((startpose[0][0, ...], startpose[1][0, ...]), (endpose[0][0, ...], endpose[1][0, ...]), quaternionScale)
+
+    endpose[0][0, ...] = endposeP
+    endpose[1][0, ...] = endposeQ
+    endpose = skel.local_to_global(endpose)
+    return warp(skel, anim, startpose, endpose)
+
+
+def time_stretch(skel:skeleton.Skeleton, anim, desiredtime):
+    bonecount = len(skel.bones)
+    stretchP, stretchQ = np.zeros([desiredtime, bonecount, 3]), np.zeros([desiredtime, bonecount, 4])
+
+    anim = skel.global_to_local(anim)
+
+    ratio = float(len(anim[0])) / float(desiredtime + 1)
+    for f in range(desiredtime):
+        t = float(f) * ratio
+        k = math.floor(t)
+        r = t - k
+        k = int(k)
+        stretchP[f, ...], stretchQ[f, ...] = pq.lerp((anim[0][k, ...], anim[1][k, ...]), (anim[0][k+1, ...], anim[1][k+1, ...]), r)
+    return skel.local_to_global(anim)
