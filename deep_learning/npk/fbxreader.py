@@ -1,6 +1,7 @@
 import sys
 import numpy as np
 from skeleton import Skeleton, Bone
+import posquat as pq
 
 fbxsdkpath = r'D:\Software\fbx_python37_x64'
 if fbxsdkpath not in sys.path:
@@ -96,6 +97,12 @@ def read_skeleton(pScene):
     lRootNode = pScene.GetRootNode()
     _skel(lRootNode.GetChild(0), -1)
 
+    #add cop bone
+    cop = Bone('COP', 0)
+    skeleton.bones[0].children.append(cop)
+    skeleton.bones.append(cop)
+
+
     skeleton.bindpose = skeleton.bindpose[:len(skeleton.bones), :, :]
     skeleton.initialpose = skeleton.initialpose[:len(skeleton.bones), :, :]
 
@@ -105,6 +112,14 @@ def read_skeleton(pScene):
     skeleton.hipsid = skeleton.boneid('Model:Hips')
     skeleton.leftlegids = [skeleton.boneid('Model:LeftUpLeg'), skeleton.boneid('Model:LeftLeg'), skeleton.boneid('Model:LeftFoot')]
     skeleton.rightlegids = [skeleton.boneid('Model:RightUpLeg'), skeleton.boneid('Model:RightLeg'), skeleton.boneid('Model:RightFoot')]
+    skeleton.leftfootid = skeleton.leftlegids[-1]
+    skeleton.rightfootid = skeleton.rightlegids[-1]
+    skeleton.copid = skeleton.boneid('COP')
+
+    skeleton.bindpose[skeleton.copid, ...] = np.eye(4)
+    skeleton.initialpose[skeleton.copid, ...] = np.eye(4)
+
+    skeleton.localinitialpq = skeleton.global_to_local(pq.pose_to_pq(skeleton.initialpose))
 
     return skeleton
 

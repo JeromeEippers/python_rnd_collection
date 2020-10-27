@@ -16,22 +16,33 @@ class Skeleton(object):
         self.parentlist = []
         self.bindpose = np.zeros([512, 4, 4])
         self.initialpose = np.zeros([512, 4, 4])
+        self.localinitialpq = None
         self.upleglength = 0
         self.leglength = 0
+
         self.hipsid = 0
         self.leftlegids = [0, 0, 0]
         self.rightlegids = [0, 0, 0]
+        self.leftfootid = 0
+        self.rightfootid = 0
+        self.copid = 0
 
-    def local_to_global(self, localpose):
+    def local_to_global(self, localpose, extra_root=None):
         count = len(self.bones)
         pos, quat = localpose
 
         gpos = np.zeros_like(pos)
         gquat = np.zeros_like(quat)
 
-        # root is not converted
-        gpos[..., 0, :] = pos[..., 0, :]
-        gquat[..., 0, :] = quat[..., 0, :]
+        if extra_root is None:
+            # root is not converted
+            gpos[..., 0, :] = pos[..., 0, :]
+            gquat[..., 0, :] = quat[..., 0, :]
+        else:
+            gpos[..., 0, :], gquat[..., 0, :] = pq.mult(
+                (pos[..., 0, :], quat[..., 0, :]),
+                extra_root
+            )
 
         for i in range(1, count):
             gpos[..., i, :], gquat[..., i, :] = pq.mult(
@@ -40,7 +51,7 @@ class Skeleton(object):
             )
         return gpos, pq.vec_normalize(gquat)
 
-    def global_to_local(self, globalpose):
+    def global_to_local(self, globalpose, extra_root=None):
         """compute a global pose or global animation out of a local pose"""
         gpos, gquat = globalpose
         ipose, iquat = pq.inv(None, gpos, gquat)
@@ -48,15 +59,27 @@ class Skeleton(object):
         pos = np.zeros_like(gpos)
         quat = np.zeros_like(gquat)
 
-        # root is not converted
-        pos[..., 0, :] = gpos[..., 0, :]
-        quat[..., 0, :] = gquat[..., 0, :]
+        if extra_root is None:
+            # root is not converted
+            pos[..., 0, :] = gpos[..., 0, :]
+            quat[..., 0, :] = gquat[..., 0, :]
+        else:
+            pos[..., 0, :], quat[..., 0, :] = pq.mult(
+                (gpos[..., 0, :], gquat[..., 0, :]),
+                pq.inv(extra_root)
+            )
 
         # multiply by the inverse parent
         pos[..., 1:, :], quat[..., 1:, :] = pq.mult(
             (gpos[..., 1:, :], gquat[..., 1:, :]),
             (ipose[..., self.parentlist[1:], :], iquat[..., self.parentlist[1:], :])
         )
+
+        #remap lengths
+        if self.localinitialpq != None:
+            #pos[..., 1:, :] = self.localinitialpq[0][1:, :]
+            pass
+
         return pos, pq.vec_normalize(quat)
 
     def foot_ik(self, hips, leftfoot, rightfoot, globalpose=None):
@@ -84,6 +107,10 @@ class Skeleton(object):
         # recompute globals
         gpos, gquat = self.local_to_global((lpos, lquat))
 
+        def _compute_max_length(start_pos, end_pos):
+            middle = end_pos - start_pos
+            return np.sqrt(np.max(np.sum(middle * middle, axis=-1, keepdims=True)))
+
         def _compute_leg(start_pos, end_pos, pole_dir):
             middle = ((end_pos - start_pos)/(self.upleglength + self.leglength)) * self.upleglength
             middle_len = np.sum(middle * middle, axis=-1, keepdims=True)
@@ -96,6 +123,13 @@ class Skeleton(object):
             middle_quat = pq.quat_from_lookat(end_pos - up_pos, pole_dir)
 
             return start_quat, middle_quat, up_pos
+
+        # check if we will be in over stretch
+        lmax = _compute_max_length(gpos[..., self.leftlegids[0], :], leftfoot[0])
+        lmax = max(lmax, _compute_max_length(gpos[..., self.rightlegids[0], :], rightfoot[0]))
+        if lmax > self.leglength + self.upleglength:
+            # TODO lower the hips in the direction of the middle between both legs
+            raise Exception()
 
         # compute legs
         start_quat, middle_quat, middle_pos = _compute_leg(

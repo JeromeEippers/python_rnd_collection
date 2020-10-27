@@ -17,7 +17,7 @@ def mirror_animation(anim):
     local[1, :3] = np.array([0, 1, 0])
     local[2, :3] = np.array([0, 0, -1])
 
-    mirror_table = [0,1,2,3,4,5,6,7,12,13,14,15,8,9,10,11,20,21,22,23,16,17,18,19]
+    mirror_table = [0,1,2,3,4,5,6,7,12,13,14,15,8,9,10,11,20,21,22,23,16,17,18,19,24]
 
     matrix_anim = pq.pq_to_pose(anim)
     new_anim = np.zeros_like(matrix_anim)
@@ -87,8 +87,6 @@ def split_animation_by_foot_ground_contacts(skel : skeleton.Skeleton, anim, spee
 
 
 def is_foot_static(footpositions, minimumspeed=10, maximumdistance=6):
-    foot_ground_vector = np.array([9, 0, 0]) * np.ones_like(
-        footpositions[..., 0, np.newaxis].repeat(3, axis=-1))  # hardcoded value of a ankle to ground distance of 9cm
 
     foot_speed = compute_speed(footpositions)
     foot_vector = compute_vector(footpositions)
@@ -118,54 +116,82 @@ def is_foot_static(footpositions, minimumspeed=10, maximumdistance=6):
 
 
 
+def single_bone_lock(foot_anim, is_static):
+    gpos, gquat = copy.deepcopy(foot_anim[0]), copy.deepcopy(foot_anim[1])
+    speed = compute_speed(foot_anim[0])
+    startframe = 0
+    lastendrange = 0
+    animlen = len(foot_anim[0])
+    for frame in range(animlen):
+        if frame == animlen - 1 or (startframe < frame and is_static[frame] < 0.5):
+            gpos[startframe:frame, :] = np.mean(gpos[startframe:frame, :], axis=0)
+            gquat[startframe:frame, :] = pq.quat_average(gquat[startframe:frame, :])
+
+            # warp trajectory
+            totalspeed = np.sum(speed[lastendrange:startframe + 1])
+            start_offset = pq.sub(
+                (gpos[lastendrange, :], gquat[lastendrange, :]),
+                (foot_anim[0][lastendrange, :], foot_anim[1][lastendrange, :])
+            )
+            end_offset = pq.sub(
+                (gpos[startframe, :], gquat[startframe, :]),
+                (foot_anim[0][startframe, :], foot_anim[1][startframe, :])
+            )
+            t = 0
+            for i in range(lastendrange, startframe + 1):
+                t += speed[i] / totalspeed
+                offset = pq.lerp(start_offset, end_offset, t)
+                gpos[i, :], gquat[i, :] = pq.add(
+                    (foot_anim[0][i, :], foot_anim[1][i, :]),
+                    offset
+                )
+
+            startframe = frame + 1
+            lastendrange = frame - 1
+        elif is_static[frame] < 0.5:
+            startframe = frame + 1
+    return gpos, gquat
+
+
+
 def lock_feet(skel : skeleton.Skeleton, anim, minimumspeed=12, maximumdistance=8):
     # generate foot speed
-    feet_ground_vector = np.array([9, 0, 0]) * np.ones_like(anim[0][..., 0, 0, np.newaxis].repeat(3, axis=-1)) # hardcoded value of a ankle to ground distance of 9cm
-    lf_ground = pq.transform_point((anim[0][..., skel.leftlegids[-1], :], anim[1][..., skel.leftlegids[-1], :]), feet_ground_vector)
-    rf_ground = pq.transform_point((anim[0][..., skel.rightlegids[-1], :], anim[1][..., skel.rightlegids[-1], :]), feet_ground_vector)
-
-    lf_static = is_foot_static(lf_ground, minimumspeed, maximumdistance)
-    rf_static = is_foot_static(rf_ground, minimumspeed, maximumdistance)
+    lf_static = is_foot_static(anim[0][..., skel.leftfootid, :], minimumspeed, maximumdistance)
+    rf_static = is_foot_static(anim[0][..., skel.rightfootid, :], minimumspeed, maximumdistance)
     animlen = len(anim[0])
-
-    def _lock(foot_anim, static):
-        gpos, gquat = copy.deepcopy(foot_anim[0]), copy.deepcopy(foot_anim[1])
-        speed = compute_speed(foot_anim[0])
-        startframe = 0
-        lastendrange = 0
-        for frame in range(animlen):
-            if frame == animlen-1 or (startframe < frame and static[frame] < 0.5):
-                gpos[startframe:frame, :] = np.mean(gpos[startframe:frame, :], axis=0)
-                gquat[startframe:frame, :] = pq.quat_average(gquat[startframe:frame, :])
-
-                # warp trajectory
-                totalspeed = np.sum(speed[lastendrange:startframe+1])
-                start_offset = pq.sub(
-                    (gpos[lastendrange, :], gquat[lastendrange, :]),
-                    (foot_anim[0][lastendrange, :], foot_anim[1][lastendrange, :])
-                )
-                end_offset = pq.sub(
-                    (gpos[startframe, :], gquat[startframe, :]),
-                    (foot_anim[0][startframe, :], foot_anim[1][startframe, :])
-                )
-                t = 0
-                for i in range(lastendrange, startframe+1):
-                    t += speed[i] / totalspeed
-                    offset = pq.lerp(start_offset, end_offset, t)
-                    gpos[i, :], gquat[i, :] = pq.add(
-                        (foot_anim[0][i, :], foot_anim[1][i, :]),
-                        offset
-                    )
-
-                startframe = frame+1
-                lastendrange = frame-1
-            elif static[frame] < 0.5:
-                startframe = frame+1
-        return gpos, gquat
 
     hips = copy.deepcopy(anim[0][..., skel.hipsid, :]), anim[1][..., skel.hipsid, :]
     hips[0][..., 1] -= 1
-    lf = _lock((anim[0][..., skel.leftlegids[-1], :], anim[1][..., skel.leftlegids[-1], :]), lf_static)
-    rf = _lock((anim[0][..., skel.rightlegids[-1], :], anim[1][..., skel.rightlegids[-1], :]), rf_static)
+    lf = single_bone_lock((anim[0][..., skel.leftfootid, :], anim[1][..., skel.leftfootid, :]), lf_static)
+    rf = single_bone_lock((anim[0][..., skel.rightfootid, :], anim[1][..., skel.rightfootid, :]), rf_static)
 
     return skel.foot_ik(hips, lf, rf, anim)
+
+
+def update_anim_with_cop_from_feet_velocities(skel : skeleton.Skeleton, anim, minimumspeed=12, maximumdistance=8):
+
+    lf_static = is_foot_static(anim[0][..., skel.leftfootid, :], minimumspeed, maximumdistance)
+    rf_static = is_foot_static(anim[0][..., skel.rightfootid, :], minimumspeed, maximumdistance)
+    animlen = len(anim[0])
+
+    ratio = np.zeros(animlen)
+    ratio[np.bitwise_and(lf_static > 0.5, rf_static > 0.5)] = 0.5
+    ratio[np.bitwise_and(lf_static < 0.5, rf_static > 0.5)] = 1.0
+
+    lf = copy.deepcopy(anim[0][..., skel.leftfootid, :])
+    lf[..., 1] = 0
+    rf = copy.deepcopy(anim[0][..., skel.rightfootid, :])
+    rf[..., 1] = 0
+
+    for _ in range(30):
+        ratio[1:] = (ratio[1:] + ratio[:-1]) * 0.5
+        ratio[0] = ratio[1]
+
+
+    ratio = ratio[..., np.newaxis] * np.ones(3)
+
+    anim[0][..., skel.copid, :], anim[1][..., skel.copid, :] = lf * (1.0-ratio) + rf * ratio, copy.deepcopy(anim[1][..., skel.hipsid, :])
+
+    return anim
+
+

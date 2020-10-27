@@ -16,9 +16,9 @@ import importanimations as IN
 
 resource_dir = Path(__file__).parent.resolve() / 'resources'
 
-'''
-# DUMP CHARACTER
 
+# DUMP CHARACTER
+'''
 reader = fbxreader.FbxReader(str(resource_dir / 'simplified_man_average.fbx'))
 x = pickle.dumps(
     (*reader.vertices_and_indices(),
@@ -27,7 +27,9 @@ x = pickle.dumps(
 )
 with open(str(resource_dir / 'simplified_man_average.dump'), 'wb') as f:
     f.write(x)
-    
+
+raise Exception()
+
 
 # DUMP ANIMATIONS
 
@@ -56,26 +58,12 @@ def compute_foot_contact_colors(skel:skeleton.Skeleton, anim, bonename):
     return contactcolors
 
 
-
-
-
 vertices, indices, skinningindices, skinningweights, skeleton = pickle.load(
     open(str(resource_dir / 'simplified_man_average.dump'), 'rb'))
 
 animations = IN.get_raw_animations(skeleton)
-
-'''
-pos, quat = skeleton.global_to_local(animations[0])
-
-pos, quat = augment.warp(
-    skeleton,
-    animations[4],
-    (animations[4][0][0,...], animations[4][1][0,...]),
-    (animations[4][0][0,...], animations[4][1][0,...])
-)
-
-animations = [(pos, quat)] + animations
-'''
+#animations = IN.generate_augmentation(skeleton, animations)
+#IN.save_animation_database(animations)
 
 # RENDERING ###############
 currentAnim = -1
@@ -88,28 +76,27 @@ def _keyboard(viewer, keys, key, action, modifiers):
     global foot_draw
     global char_draw
     if action == keys.ACTION_PRESS:
+        switch_anim = False
         if key == keys.RIGHT:
             currentAnim += 1
+            switch_anim = True
         if key == keys.LEFT:
             currentAnim += -1
-        currentAnim = currentAnim % len(animations)
-        viewer.reset_timer()
+            switch_anim = True
 
-        print(('Switch to animation', currentAnim))
-        anim = animations[currentAnim]
+        if switch_anim:
+            currentAnim = currentAnim % len(animations)
+            viewer.reset_timer()
 
-        # test tweaks
-        #rot = pq.quat_from_angle_axis(np.array([20 * 3.1415 / 180]), np.array([[0,0,1]]))
-        #anim = augment.offset_displacement_at_end(skeleton, anim, np.array([0, 0, 0]), rot[0])
+            print(('Switch to animation', currentAnim))
+            anim = animations[currentAnim]
 
-        #anim = augment.scale_displacement(skeleton, anim, .5, 0.5)
+            foot_draw.leftfootcoloranimation = compute_foot_contact_colors(skeleton, anim, 'Model:LeftFoot')
+            foot_draw.rightfootcoloranimation = compute_foot_contact_colors(skeleton, anim, 'Model:RightFoot')
 
-        foot_draw.leftfootcoloranimation = compute_foot_contact_colors(skeleton, anim, 'Model:LeftFoot')
-        foot_draw.rightfootcoloranimation = compute_foot_contact_colors(skeleton, anim, 'Model:RightFoot')
-
-        anim = pq.pq_to_pose(anim)
-        foot_draw.animation = anim
-        char_draw.animation = anim
+            anim = pq.pq_to_pose(anim)
+            foot_draw.animation = anim
+            char_draw.animation = anim
 
 
 viewer.Viewer.draw_callbacks.append(foot_draw)
