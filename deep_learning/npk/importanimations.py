@@ -51,14 +51,14 @@ def is_animation_valid(skel:skeleton.Skeleton, anim):
                 anim[0][..., skel.boneid('Model:LeftFoot'), :] - anim[0][..., skel.boneid('Model:LeftUpLeg'), :],
                 axis=-1
             )
-    ) > skel.leglength + skel.upleglength + 8:
+    ) > skel.leglength + skel.upleglength + 2:
         return False
     if np.max(
             np.linalg.norm(
                 anim[0][..., skel.boneid('Model:RightFoot'), :] - anim[0][..., skel.boneid('Model:RightUpLeg'), :],
                 axis=-1
             )
-    ) > skel.leglength + skel.upleglength + 8:
+    ) > skel.leglength + skel.upleglength + 2:
         return False
     if np.min(
             np.linalg.norm(
@@ -91,11 +91,11 @@ def is_animation_valid(skel:skeleton.Skeleton, anim):
 def generate_augmentation(skel:skeleton.Skeleton, animations):
 
     # 12 first are side steps
-    # make really small steps
+    # make small steps
     animcount = 12
     for i in range(animcount):
         print('generate pass {} / {}'.format(i, animcount))
-        animations += [augment.scale_displacement(skel, copy.deepcopy(animations[i]), 0.2, 0.2)]
+        animations += [augment.scale_displacement(skel, copy.deepcopy(animations[i]), 0.5, 0.5)]
     animations = [anim for anim in animations if is_animation_valid(skel, anim)]
 
     animcount = len(animations)
@@ -104,23 +104,20 @@ def generate_augmentation(skel:skeleton.Skeleton, animations):
         animations += [tr.mirror_animation(animations[i])]
 
     animcount = len(animations)
-    rots = [pq.quat_from_angle_axis(np.array([15 * 3.1415 / 180]), np.array([[0, 0, 1]]))]
-    rots += [pq.quat_from_angle_axis(np.array([-15 * 3.1415 / 180]), np.array([[0, 0, 1]]))]
-    rots += [pq.quat_from_angle_axis(np.array([30 * 3.1415 / 180]), np.array([[0, 0, 1]]))]
-    rots += [pq.quat_from_angle_axis(np.array([-30 * 3.1415 / 180]), np.array([[0, 0, 1]]))]
-    movs = [np.array([20, 0, 0])]
-    movs += [np.array([-10, 0, 0])]
-    movs += [np.array([0, 0, 20])]
-    movs += [np.array([0, 0, -20])]
+    rots = [pq.quat_from_angle_axis(np.array([0 * 3.1415 / 180]), np.array([[0, 0, 1]]))]
+    rots += [pq.quat_from_angle_axis(np.array([20 * 3.1415 / 180]), np.array([[0, 0, 1]]))]
+    rots += [pq.quat_from_angle_axis(np.array([-20 * 3.1415 / 180]), np.array([[0, 0, 1]]))]
+    rots += [pq.quat_from_angle_axis(np.array([40 * 3.1415 / 180]), np.array([[0, 0, 1]]))]
+    rots += [pq.quat_from_angle_axis(np.array([-40 * 3.1415 / 180]), np.array([[0, 0, 1]]))]
+    movs = [np.array([30, 0, 0])]
+    movs += [np.array([0, 0, 30])]
+    movs += [np.array([0, 0, -30])]
     movs += [np.array([20, 0, 20])]
-    movs += [np.array([-10, 0, 20])]
-    movs += [np.array([20, 0, -20])]
-    movs += [np.array([-10, 0, -20])]
     for i in range(animcount):
         print('generate pass {} / {}'.format(i, animcount))
         for rot in rots:
             for mov in movs:
-                animations += [augment.offset_displacement_at_end(skel, copy.deepcopy(animations[i]), mov, rot, np.array([0, -3, 0]))]
+                animations += [augment.offset_displacement_at_end(skel, copy.deepcopy(animations[i]), mov, rot)]
 
     animations = [anim for anim in animations if is_animation_valid(skel, anim)]
     animcount = len(animations)
@@ -139,5 +136,6 @@ def save_animation_database(animations):
         f.write(x)
 
 
-def load_animation_database(animations):
+def load_animation_database():
     return pickle.load(open(str(resource_dir / 'animation_database.dump'), 'rb'))
+

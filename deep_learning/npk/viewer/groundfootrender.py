@@ -26,7 +26,7 @@ class GroundFootRender(object):
                         in vec3 v_color;
                         out vec4 f_color;
                         void main() {
-                            f_color = vec4(v_color, 1.0);
+                            f_color = vec4(v_color, 0.3);
                         }
                     ''',
         )
@@ -52,4 +52,10 @@ class GroundFootRender(object):
         self.program['Mvp'].write((mvp).astype('f4'))
         self.program['Model'].write((model).astype('f4'))
         self.program['Color'].write((color).astype('f4'))
+
+        self.ctx.enable(moderngl.BLEND)
+        self.ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
+        self.ctx.blend_equation = moderngl.FUNC_ADD
         self.vao.render(moderngl.TRIANGLE_FAN)
+        self.ctx.disable(moderngl.BLEND)
+

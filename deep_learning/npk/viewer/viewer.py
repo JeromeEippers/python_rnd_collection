@@ -3,7 +3,7 @@ from pathlib import Path
 import moderngl
 import moderngl_window as mglw
 from moderngl_window.scene.camera import KeyboardCamera
-from . import meshrender, axisrender, gridrender, groundfootrender
+from . import meshrender, axisrender, gridrender, groundfootrender, projectedgroundshadowrender
 from pathlib import Path
 import pickle
 import numpy as np
@@ -130,12 +130,18 @@ class CharacterDraw(Draw):
 
     def register(self):
 
-        self.axisrender = axisrender.AxisRender(self.ctx, 5)
+        self.axisrender = axisrender.AxisRender(self.ctx, 3)
 
         self.meshrender = meshrender.SkinnedMeshRenderer(
             self.ctx,
             self.vertices, self.indices, self.skinningindices, self.skinningweights, self.skeleton
         )
+
+        self.shadowrender = projectedgroundshadowrender.SkinnedProjectedMeshRenderer(
+            self.ctx,
+            self.vertices, self.indices, self.skinningindices, self.skinningweights, self.skeleton
+        )
+
 
 
     def render(self, camera, time: float, frametime: float):
@@ -151,10 +157,14 @@ class CharacterDraw(Draw):
             bones = self.skeleton.initialpose
 
         self.meshrender.render(mvp, bones)
+        self.shadowrender.render(mvp, bones)
 
         if self.drawSkeleton :
             self.ctx.disable(moderngl.DEPTH_TEST)
             self.axisrender.render(mvp, bones)
+
+        self.ctx.enable(moderngl.DEPTH_TEST)
+
 
 
 
@@ -183,7 +193,6 @@ class FootGroundDraw(Draw):
         else:
             bones = self.skeleton.initialpose
 
-        self.ctx.enable_only(moderngl.DEPTH_TEST)
         color = np.zeros(3)
         if self.leftfootcoloranimation is not None:
             color = self.leftfootcoloranimation[frame]

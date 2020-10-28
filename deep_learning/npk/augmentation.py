@@ -221,4 +221,3 @@ def blend_anim_foot_phase(skel:skeleton.Skeleton, a, b, ratio, minimumspeed=10, 
         (gpos, gquat)
     )
 
-    return gpos[:currentStart, ...], gquat[:currentStart, ...]

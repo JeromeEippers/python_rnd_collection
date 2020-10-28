@@ -77,8 +77,8 @@ class Skeleton(object):
 
         #remap lengths
         if self.localinitialpq != None:
-            #pos[..., 1:, :] = self.localinitialpq[0][1:, :]
-            pass
+            pos[..., 2:, :] = self.localinitialpq[0][2:, :]
+
 
         return pos, pq.vec_normalize(quat)
 
@@ -107,17 +107,20 @@ class Skeleton(object):
         # recompute globals
         gpos, gquat = self.local_to_global((lpos, lquat))
 
-        def _compute_max_length(start_pos, end_pos):
+        def _compute_error_length(start_pos, end_pos):
             middle = end_pos - start_pos
-            return np.sqrt(np.max(np.sum(middle * middle, axis=-1, keepdims=True)))
+            return np.maximum(np.sqrt(np.sum(middle * middle, axis=-1, keepdims=True)) - self.leglength - self.upleglength, 0)
 
         def _compute_leg(start_pos, end_pos, pole_dir):
             middle = ((end_pos - start_pos)/(self.upleglength + self.leglength)) * self.upleglength
             middle_len = np.sum(middle * middle, axis=-1, keepdims=True)
+            aim_vec = middle / np.sqrt(middle_len)
             up_len = np.zeros_like(middle_len)
             sqrt_up_length = self.upleglength * self.upleglength
             up_len = np.where(middle_len < sqrt_up_length, np.sqrt(sqrt_up_length - middle_len), up_len)
-            up_pos = start_pos + middle + pole_dir * up_len
+            side_dir = pq.vec_normalize(pq.vec_cross3(aim_vec, pole_dir))
+            up_dir = pq.vec_normalize(pq.vec_cross3(side_dir, aim_vec))
+            up_pos = start_pos + middle + up_dir * up_len
 
             start_quat = pq.quat_from_lookat(up_pos - start_pos, pole_dir)
             middle_quat = pq.quat_from_lookat(end_pos - up_pos, pole_dir)
@@ -125,11 +128,18 @@ class Skeleton(object):
             return start_quat, middle_quat, up_pos
 
         # check if we will be in over stretch
-        lmax = _compute_max_length(gpos[..., self.leftlegids[0], :], leftfoot[0])
-        lmax = max(lmax, _compute_max_length(gpos[..., self.rightlegids[0], :], rightfoot[0]))
-        if lmax > self.leglength + self.upleglength:
-            # TODO lower the hips in the direction of the middle between both legs
-            raise Exception()
+        lmax = _compute_error_length(gpos[..., self.leftlegids[0], :], leftfoot[0])
+        lmax = np.maximum(lmax, _compute_error_length(gpos[..., self.rightlegids[0], :], rightfoot[0]))
+        feet_vector = (leftfoot[0] + rightfoot[0]) * 0.5 - hips[0]
+        feet_vector /= np.linalg.norm(feet_vector, axis=-1)[..., np.newaxis] * np.ones(3)
+        hips[0][..., :] = hips[0][..., :] + feet_vector * lmax
+
+        # re set the hips in local were we want it (hips is always child of root)
+        lpos[..., self.hipsid, :], lquat[..., self.hipsid, :] = \
+            pq.mult(hips, pq.inv(positions=gpos[..., 0, :], quaternions=gquat[..., 0, :]))
+
+        # recompute globals
+        gpos, gquat = self.local_to_global((lpos, lquat))
 
         # compute legs
         start_quat, middle_quat, middle_pos = _compute_leg(

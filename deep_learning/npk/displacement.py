@@ -32,21 +32,16 @@ def remove_positional_displacement(skel, anim):
     return skel.local_to_global((pos, quat))
 
 
-def reset_displacement_origin(skel, anim):
-    root = np.eye(4)
-    root[0, :3] = np.array([-1,0,0])
-    root[1, :3] = np.array([0, 0, 1])
-    root[2, :3] = np.array([0, 1, 0])
-    rootpos, rootquat = pq.pose_to_pq(root[np.newaxis, :])
+def set_displacement_origin(skel, anim, disp):
+    rootpos, rootquat = disp
 
     gpos, gquat = anim
 
     repeater_pos_anims_frames = np.ones_like(gpos[..., 0, 0, np.newaxis].repeat(3, axis=-1))
     repeater_quat_anims_frames = np.ones_like(gquat[..., 0, 0, np.newaxis].repeat(4, axis=-1))
 
-    rootpos, rootquat = pq.pose_to_pq(root[np.newaxis, :])
-    rootpos = rootpos[0, :] * repeater_pos_anims_frames
-    rootquat = rootquat[0, :] * repeater_quat_anims_frames
+    rootpos = rootpos * repeater_pos_anims_frames
+    rootquat = rootquat * repeater_quat_anims_frames
 
     original_pos = gpos[..., 0, 0, :] * repeater_pos_anims_frames
     original_quat = gquat[..., 0, 0, :] * repeater_quat_anims_frames
@@ -56,12 +51,21 @@ def reset_displacement_origin(skel, anim):
     relative_root = pq.mult(
         (npos[..., 0, :], nquat[..., 0, :]),
         inverse_original_root
-        )
+    )
     npos[..., 0, :], nquat[..., 0, :] = pq.mult(
         relative_root,
         (rootpos, rootquat)
     )
     return skel.local_to_global((npos, nquat))
+
+
+def reset_displacement_origin(skel, anim):
+    root = np.eye(4)
+    root[0, :3] = np.array([-1,0,0])
+    root[1, :3] = np.array([0, 0, 1])
+    root[2, :3] = np.array([0, 1, 0])
+
+    return set_displacement_origin(skel, anim, pq.pose_to_pq(root))
 
 
 

@@ -226,6 +226,10 @@ def transform_point(pqs, positions):
     return pos + pqs[0]
 
 
+def transform_vector(pqs, vector):
+    return quat_mul_vec(pqs[1], vector)
+
+
 def __take_one_pq(pqs, index, as_array=True):
     positions, quaternions = pqs
     if as_array:
