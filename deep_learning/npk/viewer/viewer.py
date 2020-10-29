@@ -3,7 +3,7 @@ from pathlib import Path
 import moderngl
 import moderngl_window as mglw
 from moderngl_window.scene.camera import KeyboardCamera
-from . import meshrender, axisrender, gridrender, groundfootrender, projectedgroundshadowrender
+from . import meshrender, axisrender, gridrender, groundfootrender, projectedgroundshadowrender, textrender
 from pathlib import Path
 import pickle
 import numpy as np
@@ -72,6 +72,7 @@ class Viewer(ViewerWindow):
         # default renderes
         self.axisrender = axisrender.AxisRender(self.ctx, 10)
         self.gridrender = gridrender.GridRender(self.ctx, 1000, 20)
+        self.textrender = textrender.TextRender(self.ctx, self)
 
         # offset timer
         self.internalTimer = 0
@@ -102,6 +103,8 @@ class Viewer(ViewerWindow):
         for r in self.draw_callbacks:
             r.render(self.camera, self.internalTimer, frametime)
 
+        self.ctx.disable(moderngl.DEPTH_TEST | moderngl.CULL_FACE)
+        self.textrender.render('aa')
 
 class Draw(object):
 

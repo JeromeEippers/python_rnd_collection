@@ -1,5 +1,7 @@
 import numpy as np
 import posquat as pq
+import skeleton as sk
+from modifier import warp
 
 
 def update_matrix_anim_projecting_disp_on_ground(anim):
@@ -24,7 +26,7 @@ def update_matrix_anim_projecting_disp_on_ground(anim):
     anim[:, 0, 2, :3] = eye[:, 0, 1, :3]
 
 
-def remove_positional_displacement(skel, anim):
+def remove_positional_displacement(skel:sk.Skeleton, anim):
     local_anim = skel.global_to_local(anim)
     pos, quat = local_anim
     pos[..., 0, 0] = 0
@@ -32,7 +34,7 @@ def remove_positional_displacement(skel, anim):
     return skel.local_to_global((pos, quat))
 
 
-def set_displacement_origin(skel, anim, disp):
+def set_displacement_origin(skel:sk.Skeleton, anim, disp):
     rootpos, rootquat = disp
 
     gpos, gquat = anim
@@ -59,7 +61,7 @@ def set_displacement_origin(skel, anim, disp):
     return skel.local_to_global((npos, nquat))
 
 
-def reset_displacement_origin(skel, anim):
+def reset_displacement_origin(skel:sk.Skeleton, anim):
     root = np.eye(4)
     root[0, :3] = np.array([-1,0,0])
     root[1, :3] = np.array([0, 0, 1])
@@ -68,4 +70,39 @@ def reset_displacement_origin(skel, anim):
     return set_displacement_origin(skel, anim, pq.pose_to_pq(root))
 
 
+def offset_displacement_at_end(skel:sk.Skeleton,
+                               anim,
+                               dispPositionOffset,
+                               dispQuaternionOffset,
+                               hipsoffset=np.zeros(3)):
 
+    startpose = anim[0][0, ...], anim[1][0, ...]
+    endpose = anim[0][-1, ...], anim[1][-1, ...]
+
+    endpose = skel.global_to_local(endpose)
+    endpose[0][0,...] += dispPositionOffset
+    endpose[1][0, ...] = pq.quat_mul(dispQuaternionOffset, endpose[1][0, ...])
+    endpose = skel.local_to_global(endpose)
+
+
+    return warp(skel, anim, startpose, endpose, hipsoffset)
+
+
+def scale_displacement(skel:sk.Skeleton, anim, positionScale=1.0, quaternionScale=1.0):
+    startpose = anim[0][0, ...], anim[1][0, ...]
+    endpose = anim[0][-1, ...], anim[1][-1, ...]
+
+    endpose = skel.global_to_local(endpose)
+    endposeP, _ = pq.lerp(
+        (startpose[0][0, ...], startpose[1][0, ...]),
+        (endpose[0][0, ...], endpose[1][0, ...]),
+        positionScale)
+    _, endposeQ = pq.lerp(
+        (startpose[0][0, ...], startpose[1][0, ...]),
+        (endpose[0][0, ...], endpose[1][0, ...]),
+        quaternionScale)
+
+    endpose[0][0, ...] = endposeP
+    endpose[1][0, ...] = endposeQ
+    endpose = skel.local_to_global(endpose)
+    return warp(skel, anim, startpose, endpose)

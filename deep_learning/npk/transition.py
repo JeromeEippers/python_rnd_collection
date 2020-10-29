@@ -2,11 +2,12 @@ import copy
 import math
 
 import numpy as np
+
+import modifier
 import posquat as pq
-import transform as tr
+import utilities as tr
 import displacement as disp
 import skeleton
-import augmentation as aug
 
 
 def _build_one_animation_db(skel, anim):
@@ -103,7 +104,7 @@ def create_transition(skel:skeleton.Skeleton, anim_db, mapping_db, a, b):
     )
 
     # warp
-    gpostr, gquattr = aug.warp(
+    gpostr, gquattr = modifier.warp(
         skel,
         (gpostr, gquattr),
         (a[0][-1, :, :], a[1][-1, :, :]),

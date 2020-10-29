@@ -1,16 +1,17 @@
 from pathlib import Path
 import pickle
 import numpy as np
+
+import modifier
 import posquat as pq
 import copy
 
 from viewer import viewer
 import fbxreader
-import skeleton
+import skeleton as sk
 import displacement as disp
-import transform as tr
-import augmentation as augment
-import importanimations as IN
+import utilities as ut
+import animations as IN
 import transition as trn
 
 
@@ -29,8 +30,14 @@ with open(str(resource_dir / 'simplified_man_average.dump'), 'wb') as f:
     f.write(x)
 
 raise Exception()
+'''
+
+# LOAD CHARACTER
+vertices, indices, skinningindices, skinningweights, skeleton = pickle.load(
+    open(str(resource_dir / 'simplified_man_average.dump'), 'rb'))
 
 
+'''
 # DUMP ANIMATIONS
 
 vertices, indices, skinningindices, skinningweights, skeleton = pickle.load(open(str(resource_dir / 'simplified_man_average.dump'), 'rb'))
@@ -55,22 +62,30 @@ disp.update_matrix_anim_projecting_disp_on_ground(animation)
 x = pickle.dumps(animation)
 with open(str(resource_dir / 'idle.dump'), 'wb') as f:
     f.write(x)
+
+
+reader = fbxreader.FbxReader(str(resource_dir / 'on_spot.fbx'))
+animation = reader.animation_dictionary(skeleton)['Take 001']
+disp.update_matrix_anim_projecting_disp_on_ground(animation)
+x = pickle.dumps(animation)
+with open(str(resource_dir / 'on_spot.dump'), 'wb') as f:
+    f.write(x)
     
 raise Exception()
 '''
 
-def compute_foot_contact_colors(skel:skeleton.Skeleton, anim, bonename):
+
+def compute_foot_contact_colors(skel:sk.Skeleton, anim, bonename):
     # generate foot speed
-    is_static = tr.is_foot_static(anim[0][..., skel.boneid(bonename),:])
+    is_static = ut.is_foot_static(anim[0][..., skel.boneid(bonename), :])
     contactcolors = np.repeat(np.zeros(3)[np.newaxis, ...], len(anim[0]), axis=0)
     contactcolors[is_static > 0.5] = np.array([1, 0, 0])
     return contactcolors
 
 
-vertices, indices, skinningindices, skinningweights, skeleton = pickle.load(
-    open(str(resource_dir / 'simplified_man_average.dump'), 'rb'))
 
 
+'''
 #animations = IN.get_raw_animations(skeleton)
 #animations = IN.generate_augmentation(skeleton, animations)
 #IN.save_animation_database(animations)
@@ -94,7 +109,7 @@ a = trn.create_transition(
     anim_db,
     mapping_db,
     a,
-    tr.mirror_animation((idle[0][200:240, ...], idle[1][200:240, ...]))
+    modifier.mirror_animation((idle[0][200:240, ...], idle[1][200:240, ...]))
 )
 a = trn.create_transition(
     skeleton,
@@ -112,7 +127,9 @@ a = trn.create_transition(
 )
 
 animations = [a]
-
+'''
+animations = [IN.get_raw_animation('on_spot')]
+animations[0] = modifier.lock_feet(skeleton, animations[0], 5, 10)
 
 # RENDERING ###############
 currentAnim = -1
