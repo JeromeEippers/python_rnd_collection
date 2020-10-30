@@ -133,42 +133,38 @@ animations[0] = modifier.lock_feet(skeleton, animations[0], 5, 10)
 
 # RENDERING ###############
 currentAnim = -1
-foot_draw = viewer.FootGroundDraw(skeleton)
-char_draw = viewer.CharacterDraw(True, vertices, indices, skinningindices, skinningweights, skeleton)
+class MainWidget (viewer.CharacterWidget):
+
+    def key_event(self, key, action, modifiers):
+        global currentAnim
+        global animations
+
+        keys = self.window.wnd.keys
+
+        if action == keys.ACTION_PRESS:
+            switch_anim = False
+            if key == keys.RIGHT:
+                currentAnim += 1
+                switch_anim = True
+            if key == keys.LEFT:
+                currentAnim += -1
+                switch_anim = True
+
+            if switch_anim:
+                currentAnim = currentAnim % len(animations)
+                self.window.reset_timer()
+
+                print(('Switch to animation', currentAnim))
+                anim = animations[currentAnim]
+
+                leftfootcoloranimation = compute_foot_contact_colors(skeleton, anim, 'Model:LeftFoot')
+                rightfootcoloranimation = compute_foot_contact_colors(skeleton, anim, 'Model:RightFoot')
+
+                self.change_animation(pq.pq_to_pose(anim), leftfootcoloranimation, rightfootcoloranimation)
+        return False
 
 
-def _keyboard(viewer, keys, key, action, modifiers):
-    global currentAnim
-    global foot_draw
-    global char_draw
-    if action == keys.ACTION_PRESS:
-        switch_anim = False
-        if key == keys.RIGHT:
-            currentAnim += 1
-            switch_anim = True
-        if key == keys.LEFT:
-            currentAnim += -1
-            switch_anim = True
-
-        if switch_anim:
-            currentAnim = currentAnim % len(animations)
-            viewer.reset_timer()
-
-            print(('Switch to animation', currentAnim))
-            anim = animations[currentAnim]
-
-            foot_draw.leftfootcoloranimation = compute_foot_contact_colors(skeleton, anim, 'Model:LeftFoot')
-            foot_draw.rightfootcoloranimation = compute_foot_contact_colors(skeleton, anim, 'Model:RightFoot')
-
-            #lcl = skeleton.global_to_local(anim)
-            #anim = skeleton.local_to_global(lcl)
-
-            anim = pq.pq_to_pose(anim)
-            foot_draw.animation = anim
-            char_draw.animation = anim
-
-
-viewer.Viewer.draw_callbacks.append(char_draw)
-viewer.Viewer.draw_callbacks.append(foot_draw)
-viewer.Viewer.keyboard_callbacks.append(_keyboard)
-viewer.mglw.run_window_config(viewer.Viewer)
+viewer.ViewerWindow.widgets.append(
+    MainWidget(True, vertices, indices, skinningindices, skinningweights, skeleton)
+)
+viewer.mglw.run_window_config(viewer.ViewerWindow)
