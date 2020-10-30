@@ -22,6 +22,12 @@ def get_raw_db_animations(skel:sk.Skeleton):
 
     animations = []
 
+    animation = get_raw_animation('on_spot')
+    animation = modifier.lock_feet(skel, animation, 5, 10)
+    ranges = [[33, 130], [465, 528], [558, 647], [790, 857], [892, 961], [1120, 1190], [1465, 1528]]
+    animations += [(animation[0][r[0]:r[1], ...], animation[1][r[0]:r[1], ...]) for r in ranges]
+
+
     animation = get_raw_animation('side_steps')
     animation = modifier.lock_feet(skel, animation, 5, 10)
     ranges = [[185,256], [256,374], [374,463], [463,550], [550,636], [636,735],
@@ -124,12 +130,14 @@ def is_animation_valid(skel:sk.Skeleton, anim):
 
 def generate_augmentation(skel:sk.Skeleton, animations):
 
-    # 12 first are side steps
+    # 7 first are on spot
+
+    # 12 next are side steps
     # make small steps
     animcount = 12
-    for i in range(animcount):
+    for i in range(7, 7+animcount):
         print('generate pass {} / {}'.format(i, animcount))
-        animations += [displacement.scale_displacement(skel, copy.deepcopy(animations[i]), 0.5, 0.5)]
+        animations += [displacement.scale_displacement(skel, copy.deepcopy(animations[i]), 0.6, 0.6)]
     animations = [anim for anim in animations if is_animation_valid(skel, anim)]
 
     animcount = len(animations)
@@ -139,30 +147,30 @@ def generate_augmentation(skel:sk.Skeleton, animations):
 
     animcount = len(animations)
     rots = [pq.quat_from_angle_axis(np.array([0 * 3.1415 / 180]), np.array([[0, 0, 1]]))]
-    rots += [pq.quat_from_angle_axis(np.array([20 * 3.1415 / 180]), np.array([[0, 0, 1]]))]
-    rots += [pq.quat_from_angle_axis(np.array([-20 * 3.1415 / 180]), np.array([[0, 0, 1]]))]
-    rots += [pq.quat_from_angle_axis(np.array([40 * 3.1415 / 180]), np.array([[0, 0, 1]]))]
-    rots += [pq.quat_from_angle_axis(np.array([-40 * 3.1415 / 180]), np.array([[0, 0, 1]]))]
+    rots += [pq.quat_from_angle_axis(np.array([30 * 3.1415 / 180]), np.array([[0, 0, 1]]))]
+    rots += [pq.quat_from_angle_axis(np.array([-30 * 3.1415 / 180]), np.array([[0, 0, 1]]))]
     movs = [np.array([30, 0, 0])]
     movs += [np.array([0, 0, 30])]
     movs += [np.array([0, 0, -30])]
-    movs += [np.array([20, 0, 20])]
+    movs += [np.array([30, 0, 30])]
+    movs += [np.array([30, 0, -30])]
     for i in range(animcount):
         print('generate pass {} / {}'.format(i, animcount))
         for rot in rots:
             for mov in movs:
                 animations += [displacement.offset_displacement_at_end(skel, copy.deepcopy(animations[i]), mov, rot)]
 
+    '''
     animations = [anim for anim in animations if is_animation_valid(skel, anim)]
     animcount = len(animations)
     for i in range(animcount):
         print('generate pass {} / {}'.format(i, animcount))
         animations += [displacement.scale_displacement(skel, copy.deepcopy(animations[i]), 0.6, 0.8)]
     animations = [anim for anim in animations if is_animation_valid(skel, anim)]
+    '''
 
     print('generate {} animations'.format(len(animations)))
     return animations
-
 
 def save_animation_database(animations):
     x = pickle.dumps(animations)

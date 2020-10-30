@@ -77,7 +77,7 @@ class TextRender(object):
 
 
     def render(self, text, pos=np.zeros(2), color=np.zeros(3)):
-        position = pos.copy()
+        position = pos.copy() + np.array([-1, 1 - self.f_height/self.window_size[1]])
 
         self.program['Color'].write(color.astype('f4'))
         self.program['Texture'] = 0

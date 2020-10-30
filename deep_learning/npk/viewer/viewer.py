@@ -31,6 +31,7 @@ class ViewerWindow(mglw.WindowConfig):
 
         # offset timer
         self.internalTimer = 0
+        self.playbackward = False
 
         for widget in self.widgets:
             widget.register(self)
@@ -50,6 +51,12 @@ class ViewerWindow(mglw.WindowConfig):
         if action == keys.ACTION_PRESS:
             if key == keys.SPACE:
                 self.timer.toggle_pause()
+            if key == keys.R:
+                self.playbackward = not self.playbackward
+            if key == keys.T:
+                self.internalTimer += 1.0/30.0
+            if key == keys.E:
+                self.internalTimer -= 1.0/30.0
 
     def mouse_press_event(self, x: int, y: int, button: int):
         for widget in self.widgets:
@@ -86,7 +93,11 @@ class ViewerWindow(mglw.WindowConfig):
         self.camera.projection.update(aspect_ratio=self.wnd.aspect_ratio)
 
     def render(self, time: float, frametime: float):
-        self.internalTimer += frametime
+        if self.playbackward:
+            self.internalTimer = max(0, self.internalTimer - frametime)
+        else:
+            self.internalTimer += frametime
+
 
         self.ctx.enable_only(moderngl.DEPTH_TEST | moderngl.CULL_FACE)
         self.ctx.clear(0.6, 0.6, 0.6)
@@ -186,6 +197,7 @@ class CharacterWidget(Widget):
         self.skinning_weights = skinningweights
         self.skeleton = skeleton
         self.animation = animation or []
+        self.color_animation = None
         self.left_foot_color_anim = None
         self.right_foot_color_anim = None
         self.axis_render = None
@@ -210,6 +222,11 @@ class CharacterWidget(Widget):
 
         self.ground_foot_render = groundfootrender.GroundFootRender(self.ctx)
 
+    def pre_render(self, time: float, frametime: float):
+        framecount = len(self.animation)
+        if framecount < (time * 30):
+            self.window.internalTimer -= framecount/30.0
+
     def render(self, time: float, frametime: float):
         self.ctx.enable_only(moderngl.DEPTH_TEST | moderngl.CULL_FACE)
 
@@ -222,7 +239,11 @@ class CharacterWidget(Widget):
         else:
             bones = self.skeleton.initialpose
 
-        self.mesh_render.render(mvp, bones)
+        color = np.ones(3)
+        if self.color_animation is not None:
+            color = self.color_animation[frame]
+
+        self.mesh_render.render(mvp, bones, color)
         self.shadow_render.render(mvp, bones)
 
         color = np.zeros(3)
@@ -242,8 +263,20 @@ class CharacterWidget(Widget):
         self.ctx.enable(moderngl.DEPTH_TEST)
         super().render(time, frametime)
 
-    def change_animation(self, animation, left_foot_color_anim=None, right_foot_color_anim=None):
+
+    def texts(self, time: float, frametime: float):
+        """ get the list of texts to print on screen
+        [(text, position, color), (...)]"""
+        frame = 0
+        framecount = len(self.animation)
+        if framecount > 0:
+            frame = int((time * 30) % framecount)
+        return [('frame {}'.format(frame), np.zeros(2), np.zeros(3))] + super().texts(time, frametime)
+
+
+    def change_animation(self, animation, color_animation=None, left_foot_color_anim=None, right_foot_color_anim=None):
         self.animation = animation
+        self.color_animation = color_animation
         self.left_foot_color_anim = left_foot_color_anim
         self.right_foot_color_anim = right_foot_color_anim
 

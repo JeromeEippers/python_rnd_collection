@@ -44,6 +44,7 @@ class SkinnedMeshRenderer(object):
             ''',
             fragment_shader='''
                 #version 430
+                uniform vec3 Color;
                 in vec3 v_normal;
                 out vec4 f_color;
                 void main() {
@@ -53,7 +54,7 @@ class SkinnedMeshRenderer(object):
                     vec3 sky_color = vec3(.6,.6,.7) * skyN;
                     vec3 middle_color = vec3(.4,.4,.3) * middle;
                     vec3 bounce_color = vec3(.2,.2,.2) * bounceN;
-                    f_color = vec4(sky_color + bounce_color + middle_color, 1.0);
+                    f_color = vec4(Color * (sky_color + bounce_color + middle_color), 1.0);
                 }
             ''',
         )
@@ -73,12 +74,13 @@ class SkinnedMeshRenderer(object):
             ibo
         )
 
-    def render(self, mvp, globalBoneMatrices):
+    def render(self, mvp, globalBoneMatrices, color=np.ones(3)):
         skinpose = np.zeros([32, 4, 4])
         for i in range(len(self.skeleton.bindpose)):
             skinpose[i, :, :] = np.dot(self.skeleton.bindpose[i], globalBoneMatrices[i])
 
         self.program['Mvp'].write(mvp)
         self.program['Bones'].write((skinpose.flatten()).astype('f4'))
+        self.program['Color'].write(color.astype('f4'))
 
         self.vao.render(moderngl.TRIANGLES)

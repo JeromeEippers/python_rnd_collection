@@ -68,14 +68,24 @@ def _build_one_query(skel, a, b):
 
 
 def find_best_frame(mapping_db, query):
+    weights = np.array([
+        [1, 1, 1],
+        [1, 1, 1],
+        [2, 2, 2],
+        [2, 2, 2],
+        [5, 5, 5],
+        [1, 1, 1],
+        [1, 1, 1],
+        [2, 2, 2]
+    ])
     min_error = 1E+8
     animid = 0
     frameid = 0
     for i, mapping in enumerate(mapping_db):
-        anim_len = min(len(mapping), 30)
+        anim_len = min(len(mapping), 25)
         for frame in range(anim_len):
             vec = mapping[frame, ...] - query
-            dist = np.sum(vec*vec)
+            dist = np.sum(vec*vec*weights)
             if dist < min_error:
                 min_error = dist
                 animid = i
@@ -89,6 +99,18 @@ def build_mapping_table(skel:skeleton.Skeleton, animation_db):
 
 
 def create_transition(skel:skeleton.Skeleton, anim_db, mapping_db, a, b):
+
+    # build animation
+    total_len = len(a[0]) + len(b[0]) + 500
+    gpos, gquat = np.zeros([total_len, len(skel.bones), 3]), np.zeros([total_len, len(skel.bones), 4])
+
+    # start
+    cframe = 0
+    clen = len(a[0])
+    gpos[cframe:cframe+clen, ...] = a[0][...]
+    gquat[cframe:cframe+clen, ...] = a[1][...]
+    cframe = cframe+clen
+
 
     # build query
     query = _build_one_query(skel, a, b)
@@ -111,16 +133,14 @@ def create_transition(skel:skeleton.Skeleton, anim_db, mapping_db, a, b):
         (b[0][0, :, :], b[1][0, :, :])
     )
 
-    total_len = len(a[0]) + len(b[0]) + len(gpostr)
-    gpos, gquat = np.zeros([total_len, len(skel.bones), 3]), np.zeros([total_len, len(skel.bones), 4])
+    clen = len(gpostr)
+    gpos[cframe:cframe + clen, ...] = gpostr
+    gquat[cframe:cframe + clen, ...] = gquattr
+    cframe = cframe + clen
 
-    gpos[:len(a[0]), ...] = a[0][...]
-    gquat[:len(a[0]), ...] = a[1][...]
+    clen = len(b[0])
+    gpos[cframe:cframe + clen, ...] = b[0][...]
+    gquat[cframe:cframe + clen, ...] = b[1][...]
+    cframe = cframe + clen
 
-    gpos[len(a[0]):len(a[0]) + len(gpostr), ...] = gpostr
-    gquat[len(a[0]):len(a[0]) + len(gpostr), ...] = gquattr
-
-    gpos[len(a[0]) + len(gpostr):, ...] = b[0][...]
-    gquat[len(a[0]) + len(gpostr):, ...] = b[1][...]
-
-    return gpos, gquat
+    return gpos[:cframe, ...], gquat[:cframe, ...]
