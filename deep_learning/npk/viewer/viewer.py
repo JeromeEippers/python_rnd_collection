@@ -53,9 +53,9 @@ class ViewerWindow(mglw.WindowConfig):
                 self.timer.toggle_pause()
             if key == keys.R:
                 self.playbackward = not self.playbackward
-            if key == keys.T:
+            if key == keys.P:
                 self.internalTimer += 1.0/30.0
-            if key == keys.E:
+            if key == keys.O:
                 self.internalTimer -= 1.0/30.0
 
     def mouse_press_event(self, x: int, y: int, button: int):

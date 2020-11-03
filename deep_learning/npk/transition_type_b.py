@@ -8,6 +8,7 @@ import posquat as pq
 import utilities as tr
 import displacement as disp
 import skeleton
+import inertialize as iner
 
 
 def _build_one_animation_db(skel, anim):
@@ -40,10 +41,10 @@ def _build_one_animation_db(skel, anim):
     db = []
 
     # build the matrix of mapping
-    for startFrame in range(0, max_staring_frame, 2):
-        for endFrame in range(1, max_end_frame, 2):
+    for startFrame in range(0, max_staring_frame, 3):
+        for endFrame in range(len(lfvel)-max_end_frame, len(lfvel), 3):
             start_anim_frame = startFrame
-            end_anim_frame = len(lfvel) - endFrame
+            end_anim_frame = endFrame
             assert(end_anim_frame > start_anim_frame)
 
             frame_lfpos = lfpos[start_anim_frame, :]
@@ -69,9 +70,16 @@ def _build_one_animation_db(skel, anim):
                 pq.transform_point(inverse_root, frame_lastrf)[np.newaxis, ...],
                 pq.transform_point(inverse_root, frame_lasthips)[np.newaxis, ...]],
                 axis=-1
-            ).reshape(len(anim[0]), 8, 3)
+            ).reshape(8, 3)
 
+            # check if it is useful to add this in the list
+            if db :
+                vec = db[-1][1] - table
+                dist = np.sum(vec * vec)
+                if dist < 0.05:
+                    continue
             db.append(((start_anim_frame, end_anim_frame), table))
+
     return db
 
 
@@ -105,8 +113,28 @@ def _build_one_query(skel, a, b):
 
 
 def find_best_frame(mapping_db, query):
-    # TODO map the new system
-    pass
+    weights = np.array([
+        [1, 1, 1],
+        [1, 1, 1],
+        [2, 2, 2],
+        [2, 2, 2],
+        [5, 5, 5],
+        [1, 1, 1],
+        [1, 1, 1],
+        [2, 2, 2]
+    ])
+    min_error = 1E+8
+    animid = 0
+    framesid = 0
+    for i, mapping in enumerate(mapping_db):
+        for frames, matrix in mapping:
+            vec = matrix - query
+            dist = np.sum(vec * vec * weights)
+            if dist < min_error:
+                min_error = dist
+                animid = i
+                framesid = frames
+    return animid, framesid[0], framesid[1]
 
 
 def build_mapping_table(skel:skeleton.Skeleton, animation_db):
@@ -130,17 +158,18 @@ def create_transition(skel:skeleton.Skeleton, anim_db, mapping_db, a, b):
 
     # build query
     query = _build_one_query(skel, a, b)
-    bestanim, bestframe = find_best_frame(mapping_db, query)
-    print(('transition found in', bestanim, bestframe))
+    bestanim, beststartframe, bestendframe = find_best_frame(mapping_db, query)
+    print(('transition found in', bestanim, beststartframe, bestendframe))
 
     # re align to the end of the animation
-    gpostr, gquattr = anim_db[bestanim][0][bestframe:, ...], anim_db[bestanim][1][bestframe:, ...]
+    gpostr, gquattr = anim_db[bestanim][0][beststartframe:bestendframe, ...], anim_db[bestanim][1][beststartframe:bestendframe, ...]
     gpostr, gquattr = disp.set_displacement_origin(
         skel,
         (gpostr, gquattr),
         (a[0][-1, 0, :], a[1][-1, 0, :])
     )
 
+    '''
     # warp
     gpostr, gquattr = modifier.warp(
         skel,
@@ -148,15 +177,45 @@ def create_transition(skel:skeleton.Skeleton, anim_db, mapping_db, a, b):
         (a[0][-1, :, :], a[1][-1, :, :]),
         (b[0][0, :, :], b[1][0, :, :])
     )
+    '''
 
     clen = len(gpostr)
     gpos[cframe:cframe + clen, ...] = gpostr
     gquat[cframe:cframe + clen, ...] = gquattr
+    warpframe = cframe
+    warpframeend = cframe+clen
     cframe = cframe + clen
 
     clen = len(b[0])
     gpos[cframe:cframe + clen, ...] = b[0][...]
     gquat[cframe:cframe + clen, ...] = b[1][...]
+
+    modifier.inplace_warp_feet_inertialize_body(
+        skel,
+        (gpos, gquat),
+        warpframe,
+        warpframeend,
+        int((warpframeend-warpframe) * .8)
+    )
+
+    hipsp, hipsq = gpos[cframe:cframe + clen, skel.hipsid, ...], gquat[cframe:cframe + clen, skel.hipsid, ...]
+    lfp, lfq = gpos[cframe:cframe + clen, skel.leftfootid, ...], gquat[cframe:cframe + clen, skel.leftfootid, ...]
+    rfp, rfq = gpos[cframe:cframe + clen, skel.rightfootid, ...], gquat[cframe:cframe + clen, skel.rightfootid, ...]
+
+    gpos, gquat = skel.local_to_global(
+        iner.inplace_inertialize(
+            skel.global_to_local((gpos, gquat)),
+            cframe, 20
+        )
+    )
+
+    gpos[cframe:cframe + clen, ...], gquat[cframe:cframe + clen, ...] = skel.foot_ik(
+        (hipsp, hipsq),
+        (lfp, lfq),
+        (rfp, rfq),
+        (gpos[cframe:cframe + clen, ...], gquat[cframe:cframe + clen, ...])
+    )
+
     cframe = cframe + clen
 
     return gpos[:cframe, ...], gquat[:cframe, ...]

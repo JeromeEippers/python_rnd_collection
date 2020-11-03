@@ -6,6 +6,7 @@ import numpy as np
 import posquat as pq
 import skeleton
 import utilities as tr
+import inertialize as iner
 from utilities import is_foot_static, single_bone_lock
 
 
@@ -282,3 +283,46 @@ def blend_anim_foot_phase(skel:skeleton.Skeleton, a, b, ratio, minimumspeed=10, 
         (grfpos, grfquat),
         (gpos, gquat)
     )
+
+
+def inplace_warp_feet_inertialize_body(skel : skeleton.Skeleton, anim, first_discontinuity, second_discontinuity, blendtime):
+    startpose = anim[0][first_discontinuity-1, ...], anim[1][first_discontinuity-1, ...]
+    endpose = anim[0][second_discontinuity, ...], anim[1][second_discontinuity, ...]
+
+    gwarppos, gwarpquat = warp(
+        skel,
+        (
+            anim[0][first_discontinuity:second_discontinuity, ...],
+            anim[1][first_discontinuity:second_discontinuity, ...]
+        ),
+        startpose,
+        endpose)
+
+    gpos, gquat = skel.local_to_global(
+        iner.inplace_inertialize(
+            skel.global_to_local((
+                anim[0][first_discontinuity-2:second_discontinuity, ...],
+                anim[1][first_discontinuity-2:second_discontinuity, ...]
+            )),
+            2,
+            blendtime
+        )
+    )
+
+    hipsp, hipsq = gpos[2:, skel.hipsid, ...], gquat[2:, skel.hipsid, ...]
+    lfp, lfq = gwarppos[:, skel.leftfootid, ...], gwarpquat[:, skel.leftfootid, ...]
+    rfp, rfq = gwarppos[:, skel.rightfootid, ...], gwarpquat[:, skel.rightfootid, ...]
+
+
+    gpos, gquat = skel.foot_ik(
+        (hipsp, hipsq),
+        (lfp, lfq),
+        (rfp, rfq),
+        (gpos[2:, ...], gquat[2:, ...])
+    )
+
+
+    anim[0][first_discontinuity:second_discontinuity, ...] = gwarppos
+    anim[1][first_discontinuity:second_discontinuity, ...] = gwarpquat
+
+    return anim

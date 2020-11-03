@@ -11,7 +11,10 @@ def vec_cross3(a, b):
     ], axis=-1)
 
 
-def quat_mul(x, y):
+def quat_mul(x, y, check_flip=False):
+    if check_flip:
+        y = np.where((np.sum(x * y, axis=-1) < 0)[..., np.newaxis].repeat(4, axis=-1), quat_flip(y), y)
+
     x0, x1, x2, x3 = x[..., 0:1], x[..., 1:2], x[..., 2:3], x[..., 3:4]
     y0, y1, y2, y3 = y[..., 0:1], y[..., 1:2], y[..., 2:3], y[..., 3:4]
 
@@ -62,6 +65,12 @@ def quat_from_angle_axis(angle, axis):
         z * sintheta], axis=-1)
 
 
+def quat_to_angle_axis(quats):
+    w, v = quats[..., 0:1], quats[..., 1:]
+    theta = np.arccos(w) * 2.0
+    return theta, vec_normalize(v, 1E-6)
+
+
 def quat_average(Q, weights=None):
         '''
         Averaging Quaternions.
@@ -94,7 +103,7 @@ def quat_average(Q, weights=None):
         return np.linalg.eigh(A)[1][:, -1]
 
 
-def vec_normalize(x, eps=0.0):
+def vec_normalize(x, eps=1e-08):
     return x / (np.sqrt(np.sum(x * x, axis=-1, keepdims=True)) + eps)
 
 

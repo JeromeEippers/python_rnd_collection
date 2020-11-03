@@ -89,13 +89,24 @@ def compute_foot_contact_colors(skel: sk.Skeleton, anim, bonename):
     return contactcolors
 
 '''
+print("create animations")
 animations = IN.get_raw_db_animations(skeleton)
 animations = IN.generate_augmentation(skeleton, animations)
 IN.save_animation_database(animations)
+
+
+
+print("building db")
+anim_db = IN.load_animation_database()
+mapping_db = trn.build_mapping_table(skeleton, anim_db)
+x = pickle.dumps(mapping_db)
+with open(str(resource_dir / 'mapping.dump'), 'wb') as f:
+    f.write(x)
+print("done")
 '''
 
 anim_db = IN.load_animation_database()
-mapping_db = trn.build_mapping_table(skeleton, anim_db)
+mapping_db = pickle.load(open(str(resource_dir / 'mapping.dump'), 'rb'))
 
 idle = pq.pose_to_pq(pickle.load(open(str(resource_dir / 'idle.dump'), 'rb')))
 idle = disp.reset_displacement_origin(skeleton, idle)
@@ -135,7 +146,7 @@ a = trn.create_transition(
         (idle[0][500:550, ...], idle[1][500:550, ...]),
         (
             np.array([0, 0, 0]),
-            pq.quat_mul(rootup, pq.quat_from_angle_axis(np.array([-30 * 3.1415 / 180]), np.array([[0, 1, 0]])))
+            pq.quat_mul(rootup, pq.quat_from_angle_axis(np.array([-120 * 3.1415 / 180]), np.array([[0, 1, 0]])))
         )
     )
 )
@@ -151,7 +162,7 @@ a = trn.create_transition(
         (relax[0][00:50, ...], relax[1][00:50, ...]),
         (
             np.array([-20, 0, 0]),
-            pq.quat_mul(rootup, pq.quat_from_angle_axis(np.array([20 * 3.1415 / 180]), np.array([[0, 1, 0]])))
+            pq.quat_mul(rootup, pq.quat_from_angle_axis(np.array([-100 * 3.1415 / 180]), np.array([[0, 1, 0]])))
         )
     )
 )

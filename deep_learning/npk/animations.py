@@ -134,11 +134,13 @@ def generate_augmentation(skel:sk.Skeleton, animations):
 
     # 12 next are side steps
     # make small steps
+    '''
     animcount = 12
     for i in range(7, 7+animcount):
         print('generate pass {} / {}'.format(i, animcount))
         animations += [displacement.scale_displacement(skel, copy.deepcopy(animations[i]), 0.6, 0.6)]
     animations = [anim for anim in animations if is_animation_valid(skel, anim)]
+    '''
 
     animcount = len(animations)
     for i in range(animcount):
@@ -147,13 +149,13 @@ def generate_augmentation(skel:sk.Skeleton, animations):
 
     animcount = len(animations)
     rots = [pq.quat_from_angle_axis(np.array([0 * 3.1415 / 180]), np.array([[0, 0, 1]]))]
-    rots += [pq.quat_from_angle_axis(np.array([30 * 3.1415 / 180]), np.array([[0, 0, 1]]))]
-    rots += [pq.quat_from_angle_axis(np.array([-30 * 3.1415 / 180]), np.array([[0, 0, 1]]))]
-    movs = [np.array([30, 0, 0])]
-    movs += [np.array([0, 0, 30])]
-    movs += [np.array([0, 0, -30])]
-    movs += [np.array([30, 0, 30])]
-    movs += [np.array([30, 0, -30])]
+    rots += [pq.quat_from_angle_axis(np.array([25 * 3.1415 / 180]), np.array([[0, 0, 1]]))]
+    rots += [pq.quat_from_angle_axis(np.array([-25 * 3.1415 / 180]), np.array([[0, 0, 1]]))]
+    movs = [np.array([15, 0, 0])]
+    movs += [np.array([0, 0, 15])]
+    movs += [np.array([0, 0, -15])]
+    movs += [np.array([15, 0, 15])]
+    movs += [np.array([15, 0, -15])]
     for i in range(animcount):
         print('generate pass {} / {}'.format(i, animcount))
         for rot in rots:
