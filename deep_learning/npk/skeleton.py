@@ -1,6 +1,7 @@
 import numpy as np
 import copy
 import posquat as pq
+import utilities as ut
 
 
 class Bone(object):
@@ -100,16 +101,36 @@ class Skeleton(object):
         gpos, gquat = globalpose
         lpos, lquat = localpose
 
-        # set the hips in local were we want it (hips is always child of root)
-        lpos[..., self.hipsid, :], lquat[..., self.hipsid, :] = \
-            pq.mult(hips, pq.inv(positions=gpos[..., 0, :], quaternions=gquat[..., 0, :]))
-
-        # recompute globals
-        gpos, gquat = self.local_to_global((lpos, lquat))
 
         def _compute_error_length(start_pos, end_pos):
             middle = end_pos - start_pos
-            return np.maximum(np.sqrt(np.sum(middle * middle, axis=-1, keepdims=True)) - self.leglength - self.upleglength, 0)
+            return np.maximum(np.sqrt(np.sum(middle * middle, axis=-1, keepdims=True)) - self.leglength - self.upleglength + 0.5, 0)
+
+        def _solve_reaching(ghips, gleftfoot, grightfoot, localleftupleg, localrightupleg):
+            # compute length between frames
+            hips_distance = ut.compute_distance(ghips[0])[..., np.newaxis] * np.ones(3)
+
+            def _solve_one_leg(ghips, localupleg, globalfoot):
+                gupleg = pq.mult(localupleg, ghips)
+                hips_to_foot = globalfoot[0] - gupleg[0]
+                hips_to_foot /= np.linalg.norm(hips_to_foot, axis=-1)[..., np.newaxis] * np.ones(3)
+                overshoot = _compute_error_length(gupleg[0], globalfoot[0])
+                ghips[0][..., :] = ghips[0] + hips_to_foot * overshoot
+                #ghips[0][..., 1] = ghips[0][..., 1] - overshoot[...,0]
+
+            def _solve_hips(ghips, hips_distance):
+                new_dist = ut.compute_distance(ghips[0])[..., np.newaxis] * np.ones(3)
+                hips_vector = ut.compute_vector(ghips[0]) / new_dist * ((hips_distance + new_dist) * 0.5)
+                ghips[0][..., 1:, :] = ghips[0][..., :-1, :] - hips_vector[..., 1:, :]
+
+            # first solve for the left foot
+            for i in range(5):
+                _solve_one_leg(ghips, localleftupleg, gleftfoot)
+                _solve_hips(ghips, hips_distance)
+                _solve_one_leg(ghips, localrightupleg, grightfoot)
+                _solve_hips(ghips, hips_distance)
+
+
 
         def _compute_leg(start_pos, end_pos, pole_dir):
             middle = ((end_pos - start_pos)/(self.upleglength + self.leglength)) * self.upleglength
@@ -127,12 +148,14 @@ class Skeleton(object):
 
             return start_quat, middle_quat, up_pos
 
-        # check if we will be in over stretch
-        lmax = _compute_error_length(gpos[..., self.leftlegids[0], :], leftfoot[0])
-        lmax = np.maximum(lmax, _compute_error_length(gpos[..., self.rightlegids[0], :], rightfoot[0]))
-        feet_vector = (leftfoot[0] + rightfoot[0]) * 0.5 - hips[0]
-        feet_vector /= np.linalg.norm(feet_vector, axis=-1)[..., np.newaxis] * np.ones(3)
-        hips[0][..., :] = hips[0][..., :] + feet_vector * lmax
+        # make sure we don't over stretch
+        _solve_reaching(
+            hips,
+            leftfoot,
+            rightfoot,
+            (lpos[..., self.leftlegids[0], :], lquat[..., self.leftlegids[0], :]),
+            (lpos[..., self.rightlegids[0], :], lquat[..., self.rightlegids[0], :])
+        )
 
         # re set the hips in local were we want it (hips is always child of root)
         lpos[..., self.hipsid, :], lquat[..., self.hipsid, :] = \

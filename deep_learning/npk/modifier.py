@@ -309,7 +309,8 @@ def inplace_warp_feet_inertialize_body(skel : skeleton.Skeleton, anim, first_dis
         )
     )
 
-    hipsp, hipsq = gpos[2:, skel.hipsid, ...], gquat[2:, skel.hipsid, ...]
+    # hipsp, hipsq = gpos[2:, skel.hipsid, ...], gquat[2:, skel.hipsid, ...]
+    hipsp, hipsq = gwarppos[:, skel.hipsid, ...], gwarpquat[:, skel.hipsid, ...]
     lfp, lfq = gwarppos[:, skel.leftfootid, ...], gwarpquat[:, skel.leftfootid, ...]
     rfp, rfq = gwarppos[:, skel.rightfootid, ...], gwarpquat[:, skel.rightfootid, ...]
 

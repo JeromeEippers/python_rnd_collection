@@ -79,22 +79,11 @@ raise Exception()
 '''
 
 
-
-
-def compute_foot_contact_colors(skel: sk.Skeleton, anim, bonename):
-    # generate foot speed
-    is_static = ut.is_foot_static(anim[0][..., skel.boneid(bonename), :])
-    contactcolors = np.repeat(np.zeros(3)[np.newaxis, ...], len(anim[0]), axis=0)
-    contactcolors[is_static > 0.5] = np.array([1, 0, 0])
-    return contactcolors
-
 '''
 print("create animations")
 animations = IN.get_raw_db_animations(skeleton)
 animations = IN.generate_augmentation(skeleton, animations)
 IN.save_animation_database(animations)
-
-
 
 print("building db")
 anim_db = IN.load_animation_database()
@@ -104,6 +93,7 @@ with open(str(resource_dir / 'mapping.dump'), 'wb') as f:
     f.write(x)
 print("done")
 '''
+
 
 anim_db = IN.load_animation_database()
 mapping_db = pickle.load(open(str(resource_dir / 'mapping.dump'), 'rb'))
@@ -161,8 +151,8 @@ a = trn.create_transition(
         skeleton,
         (relax[0][00:50, ...], relax[1][00:50, ...]),
         (
-            np.array([-20, 0, 0]),
-            pq.quat_mul(rootup, pq.quat_from_angle_axis(np.array([-100 * 3.1415 / 180]), np.array([[0, 1, 0]])))
+            np.array([-35, 0, 0]),
+            pq.quat_mul(rootup, pq.quat_from_angle_axis(np.array([-130 * 3.1415 / 180]), np.array([[0, 1, 0]])))
         )
     )
 )
@@ -178,11 +168,19 @@ a = trn.create_transition(
 )
 is_transition[len(a[0])-10:len(a[0])] = 0
 
-animations = [a]
+animations = [a, anim_db[226]]
 transitions = [is_transition[:len(a[0])]]
 
 # RENDERING ###############
 currentAnim = -1
+
+
+def compute_foot_contact_colors(skel: sk.Skeleton, anim, bonename):
+    # generate foot speed
+    is_static = ut.is_foot_static(anim[0][..., skel.boneid(bonename), :])
+    contactcolors = np.repeat(np.zeros(3)[np.newaxis, ...], len(anim[0]), axis=0)
+    contactcolors[is_static > 0.5] = np.array([1, 0, 0])
+    return contactcolors
 
 
 class MainWidget(viewer.CharacterWidget):
@@ -210,7 +208,7 @@ class MainWidget(viewer.CharacterWidget):
                 anim = animations[currentAnim]
 
                 body_color = np.ones_like(anim[0][:,0,:])
-                body_color[transitions[currentAnim] > 0.5] = np.array([.8, .8, 1])
+                #body_color[transitions[currentAnim] > 0.5] = np.array([.8, .8, 1])
                 leftfootcoloranimation = compute_foot_contact_colors(skeleton, anim, 'Model:LeftFoot')
                 rightfootcoloranimation = compute_foot_contact_colors(skeleton, anim, 'Model:RightFoot')
 

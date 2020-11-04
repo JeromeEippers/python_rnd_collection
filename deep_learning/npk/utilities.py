@@ -1,13 +1,20 @@
 import copy
 import numpy as np
 import posquat as pq
-import skeleton
 
 
 def compute_speed(positions):
     speed = np.zeros_like(positions[..., 0])
 
     speed[..., 1:] = np.linalg.norm(positions[..., :-1, :] - positions[..., 1:, :], axis=-1) * 30.0
+    speed[..., 0] = speed[..., 1]
+    return speed
+
+
+def compute_distance(positions):
+    speed = np.zeros_like(positions[..., 0])
+
+    speed[..., 1:] = np.linalg.norm(positions[..., :-1, :] - positions[..., 1:, :], axis=-1)
     speed[..., 0] = speed[..., 1]
     return speed
 
@@ -20,13 +27,13 @@ def compute_vector(positions):
     return disp
 
 
-def compute_bone_speed(skel:skeleton.Skeleton, anim, bonename):
+def compute_bone_speed(skel, anim, bonename):
     id = skel.boneid(bonename)
     pos, _ = anim
     return compute_speed(pos[..., id, :])
 
 
-def compute_bone_vector(skel:skeleton.Skeleton, anim, bonename):
+def compute_bone_vector(skel, anim, bonename):
     id = skel.boneid(bonename)
     pos, _ = anim
     return compute_vector(pos[..., id, :])

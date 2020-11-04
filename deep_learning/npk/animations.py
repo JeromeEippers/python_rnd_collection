@@ -36,7 +36,7 @@ def get_raw_db_animations(skel:sk.Skeleton):
 
 
     animation = get_raw_animation('turn_steps')
-    animation = modifier.lock_feet(skel, animation)
+    animation = modifier.lock_feet(skel, animation, 10, 5)
     ranges = [[184, 280], [280, 378], [375, 498], [490, 576], [576, 704], [704, 811], [811, 924], [920, 1026]]
     animations += [(animation[0][r[0] - 184:r[1] - 184, ...], animation[1][r[0] - 184:r[1] - 184, ...]) for r in ranges]
 
@@ -154,8 +154,6 @@ def generate_augmentation(skel:sk.Skeleton, animations):
     movs = [np.array([15, 0, 0])]
     movs += [np.array([0, 0, 15])]
     movs += [np.array([0, 0, -15])]
-    movs += [np.array([15, 0, 15])]
-    movs += [np.array([15, 0, -15])]
     for i in range(animcount):
         print('generate pass {} / {}'.format(i, animcount))
         for rot in rots:
