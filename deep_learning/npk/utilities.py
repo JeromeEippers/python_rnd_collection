@@ -3,6 +3,7 @@ import numpy as np
 import posquat as pq
 
 
+
 def compute_speed(positions):
     speed = np.zeros_like(positions[..., 0])
 
@@ -105,3 +106,75 @@ def single_bone_lock(foot_anim, is_static):
     return gpos, gquat
 
 
+def get_foot_phase_mapping(skel, a, b):
+    len_a = len(a[0])
+    len_b = len(b[0])
+
+    statics = np.zeros([max(len_a, len_b), 4])
+    statics[:len_a, 0] = compute_speed(a[0][..., skel.leftfootid, :]) < 2
+    statics[:len_a, 1] = compute_speed(a[0][..., skel.rightfootid, :]) < 2
+    statics[:len_b, 2] = compute_speed(b[0][..., skel.leftfootid, :]) < 2
+    statics[:len_b, 3] = compute_speed(b[0][..., skel.rightfootid, :]) < 2
+
+    current = statics[0, :]
+    start_a_range = 0
+    start_b_range = 0
+    frame_a = 0
+    frame_b = 0
+    ranges_info = []
+    while frame_a < len_a or frame_b < len_b:
+        # compute the range when the animations matches
+        while frame_a < len_a and statics[frame_a, 0] == current[0] and statics[frame_a, 1] == current[1]:
+            frame_a += 1
+        while frame_b < len_b and statics[frame_b, 2] == current[2] and statics[frame_b, 3] == current[3]:
+            frame_b += 1
+
+        ranges_info.append((
+            start_a_range, frame_a,
+            start_b_range, frame_b,
+            current[0], current[1], current[2], current[3]
+        ))
+
+        # update the values for the next range
+        start_a_range = frame_a
+        start_b_range = frame_b
+        if start_a_range >= len_a:
+            start_a_range = len_a - 1
+        if start_b_range >= len_b:
+            start_b_range = len_b - 1
+        current = np.array([statics[start_a_range, 0],
+                            statics[start_a_range, 1],
+                            statics[start_b_range, 2],
+                            statics[start_b_range, 3]])
+
+    return ranges_info
+
+
+def get_projected_feet_on_ground(skel, anim):
+    pos = np.zeros_like(anim[0][..., :2, :])
+    quats = np.zeros_like(anim[1][..., :2, :])
+    quats[..., 0, :] = copy.deepcopy(anim[1][..., 0, :])
+    quats[..., 1, :] = copy.deepcopy(anim[1][..., 0, :])
+    pos[..., 0, :] = copy.deepcopy(anim[0][..., skel.leftfootid, :])
+    pos[..., 1, :] = copy.deepcopy(anim[0][..., skel.rightfootid, :])
+    pos[..., 0, 1] = 0
+    pos[..., 1, 1] = 0
+    return pos, quats
+
+
+def offset_bone_to_start_at(anim, start):
+    rootpos, rootquat = start
+    gpos, gquat = anim
+
+    repeater_pos_anims_frames = np.ones_like(gpos[:, 0, np.newaxis].repeat(3, axis=-1))
+    repeater_quat_anims_frames = np.ones_like(gquat[:, 0, np.newaxis].repeat(4, axis=-1))
+
+    rootpos = rootpos * repeater_pos_anims_frames
+    rootquat = rootquat * repeater_quat_anims_frames
+
+    original_pos = gpos[0, :] * repeater_pos_anims_frames
+    original_quat = gquat[0, :] * repeater_quat_anims_frames
+    inverse_original_root = pq.inv(None, original_pos, original_quat)
+
+    relative_root = pq.mult(anim, inverse_original_root)
+    return pq.mult(relative_root, (rootpos, rootquat))

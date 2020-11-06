@@ -7,7 +7,7 @@ import posquat as pq
 import skeleton
 import utilities as tr
 import inertialize as iner
-from utilities import is_foot_static, single_bone_lock
+import utilities as ut
 
 
 def mirror_animation(anim):
@@ -35,22 +35,22 @@ def mirror_animation(anim):
 
 def lock_feet(skel : skeleton.Skeleton, anim, minimumspeed=12, maximumdistance=8):
     # generate foot speed
-    lf_static = is_foot_static(anim[0][..., skel.leftfootid, :], minimumspeed, maximumdistance)
-    rf_static = is_foot_static(anim[0][..., skel.rightfootid, :], minimumspeed, maximumdistance)
+    lf_static = ut.is_foot_static(anim[0][..., skel.leftfootid, :], minimumspeed, maximumdistance)
+    rf_static = ut.is_foot_static(anim[0][..., skel.rightfootid, :], minimumspeed, maximumdistance)
     animlen = len(anim[0])
 
     hips = copy.deepcopy(anim[0][..., skel.hipsid, :]), anim[1][..., skel.hipsid, :]
     hips[0][..., 1] -= 1
-    lf = single_bone_lock((anim[0][..., skel.leftfootid, :], anim[1][..., skel.leftfootid, :]), lf_static)
-    rf = single_bone_lock((anim[0][..., skel.rightfootid, :], anim[1][..., skel.rightfootid, :]), rf_static)
+    lf = ut.single_bone_lock((anim[0][..., skel.leftfootid, :], anim[1][..., skel.leftfootid, :]), lf_static)
+    rf = ut.single_bone_lock((anim[0][..., skel.rightfootid, :], anim[1][..., skel.rightfootid, :]), rf_static)
 
     return skel.foot_ik(hips, lf, rf, anim)
 
 
 def update_anim_with_cop_from_feet_velocities(skel : skeleton.Skeleton, anim, minimumspeed=12, maximumdistance=8):
 
-    lf_static = is_foot_static(anim[0][..., skel.leftfootid, :], minimumspeed, maximumdistance)
-    rf_static = is_foot_static(anim[0][..., skel.rightfootid, :], minimumspeed, maximumdistance)
+    lf_static = ut.is_foot_static(anim[0][..., skel.leftfootid, :], minimumspeed, maximumdistance)
+    rf_static = ut.is_foot_static(anim[0][..., skel.rightfootid, :], minimumspeed, maximumdistance)
     animlen = len(anim[0])
 
     ratio = np.zeros(animlen)
@@ -147,22 +147,57 @@ def warp(skel : skeleton.Skeleton, anim, startpose, endpose, hipsoffset=np.zeros
     )
 
 
-def time_stretch(skel:skeleton.Skeleton, anim, desiredtime):
+def time_stretch(skel:skeleton.Skeleton, anim, desired_time):
     bonecount = len(skel.bones)
-    stretchP, stretchQ = np.zeros([desiredtime, bonecount, 3]), np.zeros([desiredtime, bonecount, 4])
+    stretchP, stretchQ = np.zeros([desired_time, bonecount, 3]), np.zeros([desired_time, bonecount, 4])
 
     anim = skel.global_to_local(anim)
     len_anim = len(anim[0])
-    ratio = float(len_anim) / float(desiredtime+1)
-    for f in range(desiredtime):
+    ratio = float(len_anim) / float(desired_time)
+    for f in range(desired_time):
         t = float(f) * ratio
-        if t > len_anim-1:
+        if t > len_anim-2:
             t = float(len_anim) - 1.001
         k = math.floor(t)
         r = t - k
         k = int(k)
         stretchP[f, ...], stretchQ[f, ...] = pq.lerp((anim[0][k, ...], anim[1][k, ...]), (anim[0][k+1, ...], anim[1][k+1, ...]), r)
     return skel.local_to_global((stretchP, stretchQ))
+
+
+def time_stretch_in_global_space(anim, desired_time):
+    bonecount = anim[0].shape[1]
+    stretchP, stretchQ = np.zeros([desired_time, bonecount, 3]), np.zeros([desired_time, bonecount, 4])
+
+    len_anim = len(anim[0])
+    ratio = float(len_anim) / float(desired_time + 1)
+    for f in range(desired_time):
+        t = float(f) * ratio
+        if t > len_anim - 1:
+            t = float(len_anim) - 1.001
+        k = math.floor(t)
+        r = t - k
+        k = int(k)
+        stretchP[f, ...], stretchQ[f, ...] = pq.lerp((anim[0][k, ...], anim[1][k, ...]),
+                                                     (anim[0][k + 1, ...], anim[1][k + 1, ...]), r)
+    return stretchP, stretchQ
+
+
+def time_stretch_single_bone(anim, desired_time):
+    stretchP, stretchQ = np.zeros([desired_time, 3]), np.zeros([desired_time, 4])
+
+    len_anim = len(anim[0])
+    ratio = float(len_anim) / float(desired_time + 1)
+    for f in range(desired_time):
+        t = float(f) * ratio
+        if t > len_anim - 1:
+            t = float(len_anim) - 1.001
+        k = math.floor(t)
+        r = t - k
+        k = int(k)
+        stretchP[f, ...], stretchQ[f, ...] = pq.lerp((anim[0][k, ...], anim[1][k, ...]),
+                                                     (anim[0][k + 1, ...], anim[1][k + 1, ...]), r)
+    return stretchP, stretchQ
 
 
 def blend_animations(skel:skeleton.Skeleton, a, b, ratio):
@@ -198,15 +233,9 @@ def blend_animations_with_cop(skel:skeleton.Skeleton, a, b, ratio):
     return skel.local_to_global(anim, cop)
 
 
-def blend_anim_foot_phase(skel:skeleton.Skeleton, a, b, ratio, minimumspeed=10, maximumdistance=5):
+def blend_anim_foot_phase(skel:skeleton.Skeleton, a, b, ratio=0.5, ratios=None):
     len_a = len(a[0])
     len_b = len(b[0])
-
-    statics = np.zeros([max(len_a, len_b), 4])
-    statics[:len_a, 0] = tr.is_foot_static(a[0][..., skel.leftfootid, :], minimumspeed, maximumdistance)
-    statics[:len_a, 1] = tr.is_foot_static(a[0][..., skel.rightfootid, :], minimumspeed, maximumdistance)
-    statics[:len_b, 2] = tr.is_foot_static(b[0][..., skel.leftfootid, :], minimumspeed, maximumdistance)
-    statics[:len_b, 3] = tr.is_foot_static(b[0][..., skel.rightfootid, :], minimumspeed, maximumdistance)
 
     gpos, gquat = np.zeros([max(len_a, len_b), len(skel.bones), 3]), np.zeros([max(len_a, len_b), len(skel.bones), 4])
     glfpos, glfquat = np.zeros([max(len_a, len_b), 3]), np.zeros([max(len_a, len_b), 4])
@@ -214,57 +243,84 @@ def blend_anim_foot_phase(skel:skeleton.Skeleton, a, b, ratio, minimumspeed=10, 
 
     lfstatics = np.zeros(max(len_a, len_b))
     rfstatics = np.zeros(max(len_a, len_b))
-
-    current = statics[0, :]
-    start_a_range = 0
-    start_b_range = 0
-    frame_a = 0
-    frame_b = 0
     currentStart = 0
-    while frame_a < len_a or frame_b < len_b:
-        # compute the range when the animations matches
-        while frame_a < len_a and statics[frame_a, 0] == current[0] and statics[frame_a, 1] == current[1]:
-            frame_a += 1
-        while frame_b < len_b and statics[frame_b, 2] == current[2] and statics[frame_b, 3] == current[3]:
-            frame_b += 1
+    ranges = ut.get_foot_phase_mapping(skel, a, b)
 
+    # get foot mapping
+    a_projected_feet = ut.get_projected_feet_on_ground(skel, a)
+    b_projected_feet = ut.get_projected_feet_on_ground(skel, b)
+
+    if ratios is None:
+        ratios = [ratio] * len(ranges)
+
+    rangeid = 0
+    footid = 0
+    last_position = a_projected_feet[0][0], a_projected_feet[1][0]
+    for start_a_range, frame_a, start_b_range, frame_b, a_lf_static, a_rf_static, b_lf_static, b_rf_static in ranges:
+
+        ratio = ratios[rangeid]
+        rangeid += 1
+        print(ratio)
         # stretch the animations to have the same length during this range
-        # lerp between the two animations
-        rangelen = int((frame_a - start_a_range -1) * (1.0-ratio) + (frame_b - start_b_range -1) * ratio)
-        stretch_a = time_stretch(skel, (a[0][start_a_range:frame_a, ...], a[1][start_a_range:frame_a, ...]), rangelen)
-        stretch_b = time_stretch(skel, (b[0][start_b_range:frame_b, ...], b[1][start_b_range:frame_b, ...]), rangelen)
-        gpos[currentStart:currentStart+rangelen], gquat[currentStart:currentStart+rangelen] = skel.local_to_global(
-            pq.lerp(
-                skel.global_to_local(stretch_a),
-                skel.global_to_local(stretch_b),
-                ratio
-            )
+        range_length = int((frame_a - start_a_range -1) * (1.0-ratio) + (frame_b - start_b_range -1) * ratio)
+        stretch_a = time_stretch(
+            skel,
+            (a[0][start_a_range:frame_a, ...], a[1][start_a_range:frame_a, ...]),
+            range_length
         )
-        # update foot trajectories for IK
-        glfpos[currentStart:currentStart + rangelen, :], glfquat[currentStart:currentStart + rangelen, :] = \
-            copy.deepcopy(gpos[currentStart:currentStart + rangelen, skel.leftfootid, :]), \
-            copy.deepcopy(gquat[currentStart:currentStart + rangelen, skel.leftfootid, :])
+        stretch_b = time_stretch(
+            skel,
+            (b[0][start_b_range:frame_b, ...], b[1][start_b_range:frame_b, ...]),
+            range_length
+        )
 
-        grfpos[currentStart:currentStart + rangelen, :], grfquat[currentStart:currentStart + rangelen, :] = \
-            copy.deepcopy(gpos[currentStart:currentStart + rangelen, skel.rightfootid, :]), \
-            copy.deepcopy(gquat[currentStart:currentStart + rangelen, skel.rightfootid, :])
+        # lerp the 2 animations
+        # using the proper pivot
+        if a_lf_static != a_rf_static:
+            footid = 0 if a_lf_static else 1
+        pivot_a = time_stretch_single_bone(
+            (a_projected_feet[0][start_a_range:frame_a, footid, :], a_projected_feet[1][start_a_range:frame_a, footid, :]),
+            range_length
+        )
+        pivot_b = time_stretch_single_bone(
+            (b_projected_feet[0][start_a_range:frame_a, footid, :], b_projected_feet[1][start_a_range:frame_a, footid, :]),
+            range_length
+        )
+        pivot = pq.lerp(pivot_a, pivot_b, ratio)
+        pivot = ut.offset_bone_to_start_at(pivot, (last_position[0][footid], last_position[1][footid]))
+        gpos[currentStart:currentStart + range_length], gquat[currentStart:currentStart + range_length] = \
+            skel.local_to_global(
+                pq.lerp(
+                    skel.global_to_local(stretch_a, pivot_a),
+                    skel.global_to_local(stretch_b, pivot_b),
+                    ratio
+                ),
+                pivot
+            )
+        feet_positions = ut.get_projected_feet_on_ground(
+            skel,
+            (gpos[currentStart:currentStart + range_length], gquat[currentStart:currentStart + range_length])
+        )
+        last_position = feet_positions[0][range_length-1, :, :], feet_positions[1][range_length-1, :, :]
+
+        # update foot trajectories for IK
+        glfpos[currentStart:currentStart + range_length, :], glfquat[currentStart:currentStart + range_length, :] = \
+            copy.deepcopy(gpos[currentStart:currentStart + range_length, skel.leftfootid, :]), \
+            copy.deepcopy(gquat[currentStart:currentStart + range_length, skel.leftfootid, :])
+
+        grfpos[currentStart:currentStart + range_length, :], grfquat[currentStart:currentStart + range_length, :] = \
+            copy.deepcopy(gpos[currentStart:currentStart + range_length, skel.rightfootid, :]), \
+            copy.deepcopy(gquat[currentStart:currentStart + range_length, skel.rightfootid, :])
 
         # if a foot is static, let's lock it
-        if current[0] > 0.5:
-            lfstatics[currentStart:currentStart + rangelen] = 1.0
-        if current[1] > 0.5:
-            rfstatics[currentStart:currentStart + rangelen] = 1.0
+        if a_lf_static:
+            lfstatics[currentStart:currentStart + range_length] = 1.0
+        if a_rf_static:
+            rfstatics[currentStart:currentStart + range_length] = 1.0
 
+        # update for next range
+        currentStart += range_length
 
-        # update the values for the next range
-        currentStart += rangelen
-        start_a_range = frame_a
-        start_b_range = frame_b
-        if start_a_range >= len_a:
-            start_a_range = len_a - 1
-        if start_b_range >= len_b:
-            start_b_range = len_b - 1
-        current = np.array([statics[start_a_range, 0], statics[start_a_range, 1], statics[start_b_range, 2], statics[start_b_range, 3]])
 
     # clamp animations
     gpos, gquat = gpos[:currentStart, ...], gquat[:currentStart, ...]
@@ -274,8 +330,8 @@ def blend_anim_foot_phase(skel:skeleton.Skeleton, a, b, ratio, minimumspeed=10, 
     rfstatics = rfstatics[:currentStart]
 
     # lock feets
-    glfpos, glfquat = tr.single_bone_lock((glfpos, glfquat), lfstatics)
-    grfpos, grfquat = tr.single_bone_lock((grfpos, grfquat), rfstatics)
+    #glfpos, glfquat = tr.single_bone_lock((glfpos, glfquat), lfstatics)
+    #grfpos, grfquat = tr.single_bone_lock((grfpos, grfquat), rfstatics)
 
     return skel.foot_ik(
         (gpos[..., skel.hipsid, :], gquat[..., skel.hipsid, :]),
@@ -327,3 +383,11 @@ def inplace_warp_feet_inertialize_body(skel : skeleton.Skeleton, anim, first_dis
     anim[1][first_discontinuity:second_discontinuity, ...] = gwarpquat
 
     return anim
+
+
+def interleave_animations(skel: skeleton.Skeleton, a, b):
+    ranges = ut.get_foot_phase_mapping(skel, a, b)
+    ratios = np.zeros(len(ranges)) + 0.2
+    for i in range(0, len(ranges), 2):
+        ratios[i] = 0.8
+    return blend_anim_foot_phase(skel, a, b, ratios=ratios)
