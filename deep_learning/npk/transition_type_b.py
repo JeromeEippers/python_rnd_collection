@@ -32,7 +32,7 @@ def _build_one_animation_db(skel, anim):
         foot_velocity = rfvel
         foot_start = rfstart
     # find middle of the foot motion
-    max_staring_frame = foot_start + np.argwhere(foot_velocity[foot_start:] < 2)[0][0] // 2
+    max_starting_frame = foot_start + np.argwhere(foot_velocity[foot_start:] < 2)[0][0] // 2
 
     # now we check how many frames at the end of the animation we can match
     # we will only look for frames where both feet are on the ground
@@ -41,7 +41,7 @@ def _build_one_animation_db(skel, anim):
     db = []
 
     # build the matrix of mapping
-    for startFrame in range(0, max_staring_frame, 3):
+    for startFrame in range(0, max_starting_frame, 3):
         for endFrame in range(len(lfvel)-max_end_frame, len(lfvel), 3):
             start_anim_frame = startFrame
             end_anim_frame = endFrame
