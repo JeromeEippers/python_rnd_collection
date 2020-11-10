@@ -111,10 +111,10 @@ def get_foot_phase_mapping(skel, a, b):
     len_b = len(b[0])
 
     statics = np.zeros([max(len_a, len_b), 4])
-    statics[:len_a, 0] = compute_speed(a[0][..., skel.leftfootid, :]) < 2
-    statics[:len_a, 1] = compute_speed(a[0][..., skel.rightfootid, :]) < 2
-    statics[:len_b, 2] = compute_speed(b[0][..., skel.leftfootid, :]) < 2
-    statics[:len_b, 3] = compute_speed(b[0][..., skel.rightfootid, :]) < 2
+    statics[:len_a, 0] = compute_speed(a[0][..., skel.leftfootid, :]) < 30
+    statics[:len_a, 1] = compute_speed(a[0][..., skel.rightfootid, :]) < 30
+    statics[:len_b, 2] = compute_speed(b[0][..., skel.leftfootid, :]) < 30
+    statics[:len_b, 3] = compute_speed(b[0][..., skel.rightfootid, :]) < 30
 
     current = statics[0, :]
     start_a_range = 0
@@ -142,6 +142,8 @@ def get_foot_phase_mapping(skel, a, b):
             start_a_range = len_a - 1
         if start_b_range >= len_b:
             start_b_range = len_b - 1
+        assert(statics[start_a_range, 0] == statics[start_b_range, 2])
+        assert (statics[start_a_range, 1] == statics[start_b_range, 3])
         current = np.array([statics[start_a_range, 0],
                             statics[start_a_range, 1],
                             statics[start_b_range, 2],
@@ -150,13 +152,17 @@ def get_foot_phase_mapping(skel, a, b):
     return ranges_info
 
 
-def get_projected_feet_on_ground(skel, anim):
+def get_projected_feet_on_ground(skel, anim, left_foot_positions=None, right_foot_positions=None):
     pos = np.zeros_like(anim[0][..., :2, :])
     quats = np.zeros_like(anim[1][..., :2, :])
+    if left_foot_positions is None:
+        left_foot_positions = anim[0][..., skel.leftfootid, :]
+    if right_foot_positions is None:
+        right_foot_positions = anim[0][..., skel.rightfootid, :]
     quats[..., 0, :] = copy.deepcopy(anim[1][..., 0, :])
     quats[..., 1, :] = copy.deepcopy(anim[1][..., 0, :])
-    pos[..., 0, :] = copy.deepcopy(anim[0][..., skel.leftfootid, :])
-    pos[..., 1, :] = copy.deepcopy(anim[0][..., skel.rightfootid, :])
+    pos[..., 0, :] = copy.deepcopy(left_foot_positions)
+    pos[..., 1, :] = copy.deepcopy(right_foot_positions)
     pos[..., 0, 1] = 0
     pos[..., 1, 1] = 0
     return pos, quats
@@ -178,3 +184,49 @@ def offset_bone_to_start_at(anim, start):
 
     relative_root = pq.mult(anim, inverse_original_root)
     return pq.mult(relative_root, (rootpos, rootquat))
+
+
+def extract_incremental_anim(anim):
+    npos, nquat = np.zeros_like(anim[0]), np.zeros_like(anim[1])
+    gpos, gquat = anim
+
+    repeater_pos = np.ones_like(gpos[0, ..., 0, np.newaxis].repeat(3, axis=-1))
+    repeater_quat = np.ones_like(gquat[0, ..., 0, np.newaxis].repeat(4, axis=-1))
+
+    npos[0, ...] = np.zeros(3) * repeater_pos
+    nquat[0, ...] = np.array([1, 0, 0, 0]) * repeater_quat
+
+    npos[1:, ...], nquat[1:, ...] = pq.mult(
+        (gpos[1:, ...], gquat[1:, ...]),
+        pq.inv((gpos[:-1, ...], gquat[:-1, ...]))
+    )
+
+    return npos, nquat
+
+
+def convert_incremental_anim(anim, start_pose):
+    npos, nquat = np.zeros_like(anim[0]), np.zeros_like(anim[1])
+    gpos, gquat = anim
+
+    lastpos, lastquat = start_pose
+
+    for f in range(len(gpos)):
+        npos[f, ...], nquat[f, ...] = pq.mult(
+            (gpos[f, ...], gquat[f, ...]),
+            (lastpos, lastquat)
+        )
+        lastpos, lastquat = npos[f, ...], nquat[f, ...]
+    return npos, nquat
+
+
+def smooth_trajectory(anim, steps=5):
+    start_pose = anim[0][0, ...], anim[1][0, ...]
+    ipos, iquat = extract_incremental_anim(anim)
+
+    for i in range(steps):
+        ipos[1:, ...], iquat[1:, ...] = pq.lerp(
+            (ipos[1:, ...], iquat[1:, ...]),
+            (ipos[:-1, ...], iquat[:-1, ...]),
+            0.5
+        )
+    return convert_incremental_anim((ipos, iquat), start_pose)

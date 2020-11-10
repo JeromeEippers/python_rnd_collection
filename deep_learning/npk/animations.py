@@ -147,6 +147,7 @@ def generate_augmentation(skel:sk.Skeleton, animations):
         print('generate mirrors {} / {}'.format(i, animcount))
         animations += [modifier.mirror_animation(animations[i])]
 
+    '''
     animcount = len(animations)
     rots = [pq.quat_from_angle_axis(np.array([0 * 3.1415 / 180]), np.array([[0, 0, 1]]))]
     rots += [pq.quat_from_angle_axis(np.array([25 * 3.1415 / 180]), np.array([[0, 0, 1]]))]
@@ -159,6 +160,18 @@ def generate_augmentation(skel:sk.Skeleton, animations):
         for rot in rots:
             for mov in movs:
                 animations += [displacement.offset_displacement_at_end(skel, copy.deepcopy(animations[i]), mov, rot)]
+    '''
+
+    animcount = len(animations)
+    print('generate blends {}'.format(animcount * animcount))
+    for i in range(animcount):
+        for j in range(animcount):
+            if i != j:
+                try:
+                    a = modifier.blend_anim_foot_phase(skel, animations[i], animations[j], 0.5)
+                    animations.append(a)
+                except Exception:
+                    pass
 
     '''
     animations = [anim for anim in animations if is_animation_valid(skel, anim)]

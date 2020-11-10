@@ -116,12 +116,12 @@ def find_best_frame(mapping_db, query):
     weights = np.array([
         [1, 1, 1],
         [1, 1, 1],
-        [2, 2, 2],
-        [2, 2, 2],
-        [5, 5, 5],
+        [30, 30, 30],
+        [30, 30, 30],
+        [45, 45, 45],
         [1, 1, 1],
         [1, 1, 1],
-        [2, 2, 2]
+        [3, 3, 3]
     ])
     min_error = 1E+8
     animid = 0
@@ -195,7 +195,7 @@ def create_transition(skel:skeleton.Skeleton, anim_db, mapping_db, a, b):
         (gpos, gquat),
         warpframe,
         warpframeend,
-        int((warpframeend-warpframe) * .8)
+        15
     )
 
     hipsp, hipsq = gpos[cframe:cframe + clen, skel.hipsid, ...], gquat[cframe:cframe + clen, skel.hipsid, ...]

@@ -63,7 +63,7 @@ def create_transition_animation(resource_dir, skel:sk.Skeleton):
             skel,
             (relax[0][00:50, ...], relax[1][00:50, ...]),
             (
-                np.array([-35, 0, 0]),
+                np.array([-5, 0, 0]),
                 pq.quat_mul(rootup, pq.quat_from_angle_axis(np.array([-130 * 3.1415 / 180]), np.array([[0, 1, 0]])))
             )
         )

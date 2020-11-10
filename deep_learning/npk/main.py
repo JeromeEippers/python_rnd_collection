@@ -9,7 +9,7 @@ from viewer import viewer
 import skeleton as sk
 import utilities as ut
 import animations as IN
-import modifier as mod
+import transition_type_b as trn
 
 resource_dir = Path(__file__).parent.resolve() / 'resources'
 
@@ -91,10 +91,7 @@ with open(str(resource_dir / 'mapping.dump'), 'wb') as f:
 print("done")
 '''
 
-#a, is_transition = test.create_transition_animation(resource_dir, skeleton)
-
-animations = IN.get_raw_db_animations(skeleton)
-a = mod.interleave_animations(skeleton, animations[7], animations[19])
+a, is_transition = test.create_transition_animation(resource_dir, skeleton)
 animations = [a]
 #transitions = [is_transition]
 

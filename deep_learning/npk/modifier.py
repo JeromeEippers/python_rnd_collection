@@ -190,7 +190,7 @@ def time_stretch_single_bone(anim, desired_time):
     ratio = float(len_anim) / float(desired_time + 1)
     for f in range(desired_time):
         t = float(f) * ratio
-        if t > len_anim - 1:
+        if t >= len_anim - 1:
             t = float(len_anim) - 1.001
         k = math.floor(t)
         r = t - k
@@ -233,22 +233,28 @@ def blend_animations_with_cop(skel:skeleton.Skeleton, a, b, ratio):
     return skel.local_to_global(anim, cop)
 
 
-def blend_anim_foot_phase(skel:skeleton.Skeleton, a, b, ratio=0.5, ratios=None):
+def blend_anim_foot_phase(skel:skeleton.Skeleton, a, b, ratio=0.5, ratios=None, out_discontinuities=None):
     len_a = len(a[0])
     len_b = len(b[0])
 
-    gpos, gquat = np.zeros([max(len_a, len_b), len(skel.bones), 3]), np.zeros([max(len_a, len_b), len(skel.bones), 4])
-    glfpos, glfquat = np.zeros([max(len_a, len_b), 3]), np.zeros([max(len_a, len_b), 4])
-    grfpos, grfquat = np.zeros([max(len_a, len_b), 3]), np.zeros([max(len_a, len_b), 4])
+    maxframe = max(len_a, len_b)*2
+
+    gpos, gquat = np.zeros([maxframe, len(skel.bones), 3]), np.zeros([maxframe, len(skel.bones), 4])
+    glfpos, glfquat = np.zeros([maxframe, 3]), np.zeros([maxframe, 4])
+    grfpos, grfquat = np.zeros([maxframe, 3]), np.zeros([maxframe, 4])
 
     lfstatics = np.zeros(max(len_a, len_b))
     rfstatics = np.zeros(max(len_a, len_b))
-    currentStart = 0
+    current_start = 0
     ranges = ut.get_foot_phase_mapping(skel, a, b)
 
     # get foot mapping
     a_projected_feet = ut.get_projected_feet_on_ground(skel, a)
     b_projected_feet = ut.get_projected_feet_on_ground(skel, b)
+
+    # turn them into incremental animation
+    a_projected_incr_feet = ut.extract_incremental_anim(a_projected_feet)
+    b_projected_incr_feet = ut.extract_incremental_anim(b_projected_feet)
 
     if ratios is None:
         ratios = [ratio] * len(ranges)
@@ -260,9 +266,10 @@ def blend_anim_foot_phase(skel:skeleton.Skeleton, a, b, ratio=0.5, ratios=None):
 
         ratio = ratios[rangeid]
         rangeid += 1
-        print(ratio)
+
         # stretch the animations to have the same length during this range
         range_length = int((frame_a - start_a_range -1) * (1.0-ratio) + (frame_b - start_b_range -1) * ratio)
+        current_end = current_start + range_length
         stretch_a = time_stretch(
             skel,
             (a[0][start_a_range:frame_a, ...], a[1][start_a_range:frame_a, ...]),
@@ -278,60 +285,126 @@ def blend_anim_foot_phase(skel:skeleton.Skeleton, a, b, ratio=0.5, ratios=None):
         # using the proper pivot
         if a_lf_static != a_rf_static:
             footid = 0 if a_lf_static else 1
+        else:
+            footid = (footid + 1) % 2
+
+        #print(ratio, footid, currentStart, a_lf_static, a_rf_static, b_lf_static, b_rf_static)
+
+        # make the pivot match the length of the animation
         pivot_a = time_stretch_single_bone(
-            (a_projected_feet[0][start_a_range:frame_a, footid, :], a_projected_feet[1][start_a_range:frame_a, footid, :]),
+            (a_projected_feet[0][start_a_range:frame_a, footid, :],
+             a_projected_feet[1][start_a_range:frame_a, footid, :]),
             range_length
         )
         pivot_b = time_stretch_single_bone(
-            (b_projected_feet[0][start_a_range:frame_a, footid, :], b_projected_feet[1][start_a_range:frame_a, footid, :]),
+            (b_projected_feet[0][start_b_range:frame_b, footid, :],
+             b_projected_feet[1][start_b_range:frame_b, footid, :]),
             range_length
         )
-        pivot = pq.lerp(pivot_a, pivot_b, ratio)
-        pivot = ut.offset_bone_to_start_at(pivot, (last_position[0][footid], last_position[1][footid]))
-        gpos[currentStart:currentStart + range_length], gquat[currentStart:currentStart + range_length] = \
-            skel.local_to_global(
-                pq.lerp(
+
+        # lerp the animation relative to the pivots
+        lerped = pq.lerp(
                     skel.global_to_local(stretch_a, pivot_a),
                     skel.global_to_local(stretch_b, pivot_b),
                     ratio
-                ),
-                pivot
-            )
-        feet_positions = ut.get_projected_feet_on_ground(
-            skel,
-            (gpos[currentStart:currentStart + range_length], gquat[currentStart:currentStart + range_length])
+                )
+
+        # match the pivot incremental animations to get a continuous stream of motion
+        pivot_a = time_stretch_single_bone(
+            (a_projected_incr_feet[0][start_a_range:frame_a, footid, :],
+             a_projected_incr_feet[1][start_a_range:frame_a, footid, :]),
+            range_length
         )
-        last_position = feet_positions[0][range_length-1, :, :], feet_positions[1][range_length-1, :, :]
+        pivot_b = time_stretch_single_bone(
+            (b_projected_incr_feet[0][start_b_range:frame_b, footid, :],
+             b_projected_incr_feet[1][start_b_range:frame_b, footid, :]),
+            range_length
+        )
+        # lerp the pivot incremental animations and convert back into relative motion
+        pivot_a = ut.convert_incremental_anim(pivot_a, (last_position[0][footid], last_position[1][footid]))
+        pivot_b = ut.convert_incremental_anim(pivot_b, (last_position[0][footid], last_position[1][footid]))
+        pivot = pq.lerp(pivot_a, pivot_b, ratio)
+        #pivot = ut.convert_incremental_anim(pivot, (last_position[0][footid], last_position[1][footid]))
+
+        # remap the local lerped animation to the new pivot motion
+        global_lerped = skel.local_to_global(lerped, pivot)
+        gpos[current_start:current_end, ...] = global_lerped[0]
+        gquat[current_start:current_end, ...] = global_lerped[1]
+
 
         # update foot trajectories for IK
-        glfpos[currentStart:currentStart + range_length, :], glfquat[currentStart:currentStart + range_length, :] = \
-            copy.deepcopy(gpos[currentStart:currentStart + range_length, skel.leftfootid, :]), \
-            copy.deepcopy(gquat[currentStart:currentStart + range_length, skel.leftfootid, :])
+        glfpos[current_start:current_start + range_length, :], glfquat[current_start:current_start + range_length, :] = \
+            copy.deepcopy(gpos[current_start:current_end, skel.leftfootid, :]), \
+            copy.deepcopy(gquat[current_start:current_end, skel.leftfootid, :])
 
-        grfpos[currentStart:currentStart + range_length, :], grfquat[currentStart:currentStart + range_length, :] = \
-            copy.deepcopy(gpos[currentStart:currentStart + range_length, skel.rightfootid, :]), \
-            copy.deepcopy(gquat[currentStart:currentStart + range_length, skel.rightfootid, :])
+        grfpos[current_start:current_start + range_length, :], grfquat[current_start:current_start + range_length, :] = \
+            copy.deepcopy(gpos[current_start:current_end, skel.rightfootid, :]), \
+            copy.deepcopy(gquat[current_start:current_end, skel.rightfootid, :])
 
         # if a foot is static, let's lock it
         if a_lf_static:
-            lfstatics[currentStart:currentStart + range_length] = 1.0
+            lfstatics[current_start:current_start + range_length] = 1.0
+            #if currentStart > 0:
+            #    glfpos[currentStart:currentStart + range_length, :], glfquat[currentStart:currentStart + range_length, :] = \
+            #        glfpos[currentStart-1:currentStart, :], \
+            #        glfquat[currentStart-1:currentStart, :]
         if a_rf_static:
-            rfstatics[currentStart:currentStart + range_length] = 1.0
+            rfstatics[current_start:current_start + range_length] = 1.0
+            #if currentStart > 0:
+            #    grfpos[currentStart:currentStart + range_length, :], grfquat[currentStart:currentStart + range_length, :] = \
+            #        grfpos[currentStart-1:currentStart, :], \
+            #        grfquat[currentStart-1:currentStart, :]
+
+        feet_positions = ut.get_projected_feet_on_ground(
+            skel,
+            (gpos[current_start:current_end], gquat[current_start:current_end]),
+            glfpos[current_start:current_end, :],
+            grfpos[current_start:current_end, :]
+        )
+        last_position = feet_positions[0][-1, :, :], feet_positions[1][-1, :, :]
+
+
+        if current_start > 2:
+            iner.inplace_inertialize(
+                (
+                    gpos[current_start-2:current_end, skel.hipsid:skel.hipsid+1, :],
+                    gquat[current_start-2:current_end, skel.hipsid:skel.hipsid+1, :]
+                ),
+                2, 20)
+            iner.inplace_inertialize(
+                (
+                    glfpos[current_start-2:current_end, np.newaxis, :],
+                    glfquat[current_start-2:current_end, np.newaxis, :]
+                ),
+                2, 20)
+            iner.inplace_inertialize(
+                (
+                    grfpos[current_start-2:current_end, np.newaxis, :],
+                    grfquat[current_start-2:current_end, np.newaxis, :]
+                ),
+                2, 20)
 
         # update for next range
-        currentStart += range_length
+        current_start += range_length
+        if out_discontinuities is not None:
+            out_discontinuities.append(current_start)
 
 
     # clamp animations
-    gpos, gquat = gpos[:currentStart, ...], gquat[:currentStart, ...]
-    glfpos, glfquat = glfpos[:currentStart, ...], glfquat[:currentStart, ...]
-    grfpos, grfquat = grfpos[:currentStart, ...], grfquat[:currentStart, ...]
-    lfstatics = lfstatics[:currentStart]
-    rfstatics = rfstatics[:currentStart]
+    gpos, gquat = gpos[:current_start, ...], gquat[:current_start, ...]
+    glfpos, glfquat = glfpos[:current_start, ...], glfquat[:current_start, ...]
+    grfpos, grfquat = grfpos[:current_start, ...], grfquat[:current_start, ...]
+    lfstatics = lfstatics[:current_start]
+    rfstatics = rfstatics[:current_start]
 
     # lock feets
-    #glfpos, glfquat = tr.single_bone_lock((glfpos, glfquat), lfstatics)
-    #grfpos, grfquat = tr.single_bone_lock((grfpos, grfquat), rfstatics)
+    glfpos, glfquat = tr.single_bone_lock((glfpos, glfquat), lfstatics)
+    grfpos, grfquat = tr.single_bone_lock((grfpos, grfquat), rfstatics)
+
+    # smooth the trajectories
+    gpos, gquat = ut.smooth_trajectory((gpos, gquat), 12)
+    glfpos, glfquat = ut.smooth_trajectory((glfpos, glfquat), 8)
+    grfpos, grfquat = ut.smooth_trajectory((grfpos, grfquat), 8)
 
     return skel.foot_ik(
         (gpos[..., skel.hipsid, :], gquat[..., skel.hipsid, :]),
@@ -390,4 +463,48 @@ def interleave_animations(skel: skeleton.Skeleton, a, b):
     ratios = np.zeros(len(ranges)) + 0.2
     for i in range(0, len(ranges), 2):
         ratios[i] = 0.8
-    return blend_anim_foot_phase(skel, a, b, ratios=ratios)
+
+    out_discontinuities = []
+    anim = blend_anim_foot_phase(skel, a, b, ratios=ratios, out_discontinuities=out_discontinuities)
+
+    '''
+    feet_positions = ut.get_projected_feet_on_ground(skel, anim)
+    foot_positions = feet_positions[0][:, 0, :], feet_positions[1][:, 0, :]
+    anim = skel.global_to_local(anim)
+    for i in range(len(out_discontinuities)-1):
+        iner.inplace_inertialize(anim, out_discontinuities[i], 15, out_discontinuities[i+1])
+    anim = skel.local_to_global(anim)
+    '''
+    return anim
+
+
+def combine_animations(skel:skeleton.Skeleton, a, b):
+    length = max(len(a[0]), len(b[0]))
+    a = time_stretch(skel, a, length)
+    b = time_stretch(skel, b, length)
+
+    ids = [skel.hipsid, skel.leftfootid, skel.rightfootid]
+    last_pose = a[0][0, ids, :], a[1][0, ids, :]
+    apos, aquat = ut.extract_incremental_anim((a[0][:, ids, :], a[1][:, ids, :]))
+    bpos, bquat = ut.extract_incremental_anim((b[0][:, ids, :], b[1][:, ids, :]))
+
+    npos, nquat = np.zeros([length, 3, 3]), np.zeros([length, 3, 4])
+
+    for f in range(length):
+        npos[f, ...], nquat[f, ...] = pq.mult(
+            (apos[f, ...], aquat[f, ...]),
+            last_pose
+        )
+        npos[f, ...], nquat[f, ...] = pq.mult(
+            (bpos[f, ...], bquat[f, ...]),
+            (npos[f, ...], nquat[f, ...])
+        )
+        last_pose = npos[f, ...], nquat[f, ...]
+
+    return skel.foot_ik(
+        (npos[:, 0, :], nquat[:, 0, :]),
+        (npos[:, 1, :], nquat[:, 1, :]),
+        (npos[:, 2, :], nquat[:, 2, :]),
+        a
+    )
+

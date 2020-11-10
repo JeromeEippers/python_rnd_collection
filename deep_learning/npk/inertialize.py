@@ -65,7 +65,7 @@ def inertialize_quaternion(frame_m2, frame_m1, target, current, dt, blendTime, t
     return pq.vec_normalize(pq.quat_mul(pq.quat_from_angle_axis(xt, vx0), current, False))
 
 
-def inplace_inertialize(anim, startFrame, inertializeLength):
+def inplace_inertialize(anim, startFrame, inertializeLength, maxEndFrame=None):
     pos, quat = anim[0], anim[1]
 
     m2pos, m2quat = pos[startFrame - 2, ...], quat[startFrame - 2, ...]
@@ -78,7 +78,10 @@ def inplace_inertialize(anim, startFrame, inertializeLength):
     startquat = copy.deepcopy(quat[startFrame, ...])
 
     t1 = float(inertializeLength) / 30.0
-    for frame in range(startFrame, startFrame+inertializeLength):
+    if maxEndFrame is None:
+        maxEndFrame = startFrame+inertializeLength
+    maxEndFrame = min(maxEndFrame, startFrame+inertializeLength)
+    for frame in range(startFrame, maxEndFrame):
         t = float(frame - startFrame + 1) / 30.0
         pos[frame, ...] = inertialize_vector(
             m2pos,
