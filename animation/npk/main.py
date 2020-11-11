@@ -5,7 +5,7 @@ import numpy as np
 import posquat as pq
 
 import test
-from viewer import viewer
+import openglviewer as viewer
 import skeleton as sk
 import utilities as ut
 import animations as IN
