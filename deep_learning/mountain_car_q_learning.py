@@ -15,7 +15,7 @@ def get_state(observation):
     return np.digitize(pos, pos_space) * 20 + np.digitize(vel, vel_space)
 
 
-def train_q_table(env, epoch=10000, explore_ratio=0.1, learning_rate=0.1, future_weight=0.9):
+def train_q_table(env, epoch=10000, lr=0.1, epsilon=0.1, eps_dec=1E-5, eps_end=0.1, gamma=0.9):
     qtable = np.zeros((20*20, 3))
 
     epoch_scores = np.zeros(epoch)
@@ -28,7 +28,7 @@ def train_q_table(env, epoch=10000, explore_ratio=0.1, learning_rate=0.1, future
 
             # we check if we want to use the qtable or a random action
             action = 0
-            if random.uniform(0, 1) < explore_ratio:
+            if random.uniform(0, 1) < epsilon:
                 action = env.action_space.sample()
             else:
                 action = np.argmax(qtable[state, :])
@@ -39,14 +39,17 @@ def train_q_table(env, epoch=10000, explore_ratio=0.1, learning_rate=0.1, future
             total_score += reward
 
             # Bell equation
-            qtable[state, action] = (1.0 - learning_rate) * qtable[state, action] + \
-                learning_rate * (reward + future_weight * np.max(qtable[state_, :]))
+            qtable[state, action] = qtable[state, action] + lr * \
+                                    (reward + gamma * np.max(qtable[state_, :]) - qtable[state, action])
 
             # prepare for next loop
             state = state_
 
+        epsilon -= eps_dec
+        epsilon = max(epsilon, eps_end)
+
         if e % 100 == 0:
-            print(e, total_score)
+            print(e, total_score, epsilon)
 
         epoch_scores[e] = total_score
 
@@ -54,20 +57,19 @@ def train_q_table(env, epoch=10000, explore_ratio=0.1, learning_rate=0.1, future
     plt.savefig('mountain_car_scores.png')
     return qtable
 
-qtable = train_q_table(env, epoch=1000, learning_rate=0.15, future_weight=0.99)
+qtable = train_q_table(env, epoch=300, lr=0.1, gamma=0.99, epsilon=1.0, eps_dec=0.005, eps_end=0.01)
 
 
+for i in range(10):
+    done = False
+    total_score = 0
+    state = get_state(env.reset())
+    while not done:
+        action = np.argmax(qtable[state, :])
 
-done = False
-total_score = 0
-state = get_state(env.reset())
-while not done:
-    action = np.argmax(qtable[state, :])
+        # we take the action
+        observation, reward, done, info = env.step(action)
+        state = get_state(observation)
+        total_score += reward
 
-    # we take the action
-    observation, reward, done, info = env.step(action)
-    state = get_state(observation)
-    total_score += reward
-
-    env.render()
-    time.sleep(1.0/30.0)
+        env.render()
