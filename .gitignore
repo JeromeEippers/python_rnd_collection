@@ -102,3 +102,29 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+animation/npk/resources/animation_database.dump
+
+animation/npk/resources/mapping.dump
+
+maya/rigging/numexpr-2.6.2-cp27-none-win_amd64.whl
+
+maya/rigging/numpy-1.13.1\+mkl-cp27-none-win_amd64.whl
+
+maya/rigging/scipy-0.19.1-cp27-none-win_amd64.whl
+
+new_challenge_old_research/motion_graph_2/all_animations_and_clouds.dat
+
+new_challenge_old_research/motion_graph_2/all_animations_errors.dat
+
+new_challenge_old_research/motion_graph_2/all_moves_animations.dat
+
+new_challenge_old_research/motion_graph_2/random_walk_animation_discontinuities.dat
+
+new_challenge_old_research/motion_graph_2/random_walk_animation_raw.dat
+
+new_challenge_old_research/spacial_relation_retarget/exported_human_animation.dat
+
+new_challenge_old_research/spacial_relation_retarget/exported_rhino_animation.dat
+
+new_challenge_old_research/spacial_relation_retarget/retargeted_rhino_animation.dat
