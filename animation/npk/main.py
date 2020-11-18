@@ -91,9 +91,11 @@ with open(str(resource_dir / 'mapping.dump'), 'wb') as f:
 print("done")
 '''
 
-a, is_transition = test.create_transition_animation(resource_dir, skeleton)
-animations = [a]
+#a, is_transition = test.create_transition_animation(resource_dir, skeleton)
+#animations = [a]
 #transitions = [is_transition]
+
+animations = IN.get_raw_db_animations(skeleton)
 
 # RENDERING ###############
 currentAnim = -1

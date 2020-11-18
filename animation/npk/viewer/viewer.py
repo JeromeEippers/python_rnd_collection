@@ -3,7 +3,7 @@ from pathlib import Path
 import moderngl
 import moderngl_window as mglw
 from moderngl_window.scene.camera import KeyboardCamera
-from . import meshrender, axisrender, gridrender, groundfootrender, projectedgroundshadowrender, textrender
+from . import meshrender, axisrender, gridrender, groundfootrender, projectedgroundshadowrender, textrender, timeline
 from pathlib import Path
 import numpy as np
 
@@ -98,6 +98,8 @@ class ViewerWindow(mglw.WindowConfig):
         else:
             self.internalTimer += frametime
 
+        for widget in self.widgets:
+            widget.pre_render(self.internalTimer, frametime)
 
         self.ctx.enable_only(moderngl.DEPTH_TEST | moderngl.CULL_FACE)
         self.ctx.clear(0.6, 0.6, 0.6)
@@ -186,6 +188,64 @@ class Widget(object):
             widget.resize(width, height)
 
 
+
+class TimelineWidget(Widget):
+    def __init__(self, animation=None):
+        super().__init__()
+        self.timeline_render = None
+        self.is_active = False
+        self.current_active_frame = 0
+        self.animation = animation or []
+
+    def register(self, window, parent=None):
+        super().register(window, self)
+        self.timeline_render = timeline.Timeline(self.ctx, window)
+
+    def pre_render(self, time: float, frametime: float):
+        super().pre_render(time, frametime)
+        framecount = len(self.animation)
+
+        if self.is_active :
+            self.window.internalTimer = self.current_active_frame/30.0
+        elif framecount < (time * 30):
+            self.window.internalTimer -= framecount/30.0
+
+    def render(self, time: float, frametime: float):
+        color = np.zeros(3)
+        if self.is_active:
+            color += 0.2
+
+        timing = 0
+        framecount = len(self.animation)
+        if framecount > 0:
+            frame = (time * 30)
+            timing = float(frame) / float(framecount)
+
+        self.timeline_render.render(timing, color)
+        super().render(time, frametime)
+
+    def mouse_press_event(self, x: int, y: int, button: int):
+        if button == 1:
+            if self.timeline_render.is_mouse_in(x, y):
+                self.is_active = True
+                self.current_active_frame = int(self.timeline_render.mouse_timeline_percent(x, y) * len(self.animation))
+                return True
+        return super().mouse_press_event(x, y, button)
+
+    def mouse_release_event(self, x: int, y: int, button: int):
+        if button == 1:
+            self.is_active = False
+        return super().mouse_release_event(x, y, button)
+
+    def mouse_drag_event(self, x: int, y: int, dx: int, dy: int):
+        if self.is_active:
+            self.current_active_frame = int(self.timeline_render.mouse_timeline_percent(x, y) * len(self.animation))
+            return True
+        return super().mouse_drag_event(x, y, dx, dy)
+
+
+
+
 class CharacterWidget(Widget):
 
     def __init__(self, drawSkeleton, vertices, indices, skinningindices, skinningweights, skeleton, animation=None):
@@ -204,9 +264,11 @@ class CharacterWidget(Widget):
         self.mesh_render = None
         self.shadow_render = None
         self.ground_foot_render = None
+        self.timeline = TimelineWidget(animation)
+        self.widgets.append(self.timeline)
 
-    def register(self, window):
-        super().register(window)
+    def register(self, window, parent=None):
+        super().register(window, self)
 
         self.axis_render = axisrender.AxisRender(self.ctx, 3)
 
@@ -221,11 +283,6 @@ class CharacterWidget(Widget):
         )
 
         self.ground_foot_render = groundfootrender.GroundFootRender(self.ctx)
-
-    def pre_render(self, time: float, frametime: float):
-        framecount = len(self.animation)
-        if framecount < (time * 30):
-            self.window.internalTimer -= framecount/30.0
 
     def render(self, time: float, frametime: float):
         self.ctx.enable_only(moderngl.DEPTH_TEST | moderngl.CULL_FACE)
@@ -279,4 +336,6 @@ class CharacterWidget(Widget):
         self.color_animation = color_animation
         self.left_foot_color_anim = left_foot_color_anim
         self.right_foot_color_anim = right_foot_color_anim
+        self.timeline.animation = animation
+
 
