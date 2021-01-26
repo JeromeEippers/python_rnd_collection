@@ -1,6 +1,6 @@
 import copy
 import numpy as np
-import posquat as pq
+from . import posquat as pq
 
 
 

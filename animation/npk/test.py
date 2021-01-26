@@ -3,9 +3,9 @@ import pickle
 import numpy as np
 
 import animations as IN
-import displacement as disp
-import posquat as pq
-import skeleton as sk
+from animation_framework import modifier_displacement as disp
+from animation_framework import posquat as pq
+from animation_framework import skeleton as sk
 import transition_type_b as trn
 
 

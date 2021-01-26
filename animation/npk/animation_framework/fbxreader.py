@@ -1,7 +1,7 @@
 import sys
 import numpy as np
-from skeleton import Skeleton, Bone
-import posquat as pq
+from .skeleton import Skeleton, Bone
+from . import posquat as pq
 
 fbxsdkpath = r'D:\Software\fbx_python37_x64'
 if fbxsdkpath not in sys.path:

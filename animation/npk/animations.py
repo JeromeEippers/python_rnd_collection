@@ -2,14 +2,13 @@ from pathlib import Path
 import pickle
 import numpy as np
 
-import displacement
-import modifier
-import posquat as pq
-import copy
+from animation_framework import modifier
+from animation_framework import posquat as pq
 
-from utilities import compute_bone_speed
-import skeleton as sk
-import displacement as disp
+
+from animation_framework.utilities import compute_bone_speed
+from animation_framework import skeleton as sk
+from animation_framework import modifier_displacement as disp
 
 resource_dir = Path(__file__).parent.resolve() / 'resources'
 

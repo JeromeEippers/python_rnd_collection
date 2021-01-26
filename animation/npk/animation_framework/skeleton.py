@@ -1,7 +1,7 @@
 import numpy as np
 import copy
-import posquat as pq
-import utilities as ut
+from . import posquat as pq
+from . import utilities as ut
 
 
 class Bone(object):
@@ -120,6 +120,7 @@ class Skeleton(object):
 
             def _solve_hips(ghips, hips_distance):
                 new_dist = ut.compute_distance(ghips[0])[..., np.newaxis] * np.ones(3)
+                new_dist += 1e-8
                 hips_vector = ut.compute_vector(ghips[0]) / new_dist * ((hips_distance + new_dist) * 0.5)
                 ghips[0][..., 1:, :] = ghips[0][..., :-1, :] - hips_vector[..., 1:, :]
 

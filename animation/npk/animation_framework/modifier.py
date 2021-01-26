@@ -3,11 +3,11 @@ import math
 
 import numpy as np
 
-import posquat as pq
-import skeleton
-import utilities as tr
-import inertialize as iner
-import utilities as ut
+from . import posquat as pq
+from . import skeleton
+from . import utilities as tr
+from . import inertialize as iner
+from . import utilities as ut
 
 
 def mirror_animation(anim):

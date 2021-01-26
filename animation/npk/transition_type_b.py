@@ -3,12 +3,12 @@ import math
 
 import numpy as np
 
-import modifier
-import posquat as pq
-import utilities as tr
-import displacement as disp
-import skeleton
-import inertialize as iner
+from animation_framework import modifier
+from animation_framework import posquat as pq
+from animation_framework import utilities as tr
+from animation_framework import modifier_displacement as disp
+from animation_framework import skeleton
+from animation_framework import inertialize as iner
 
 
 def _build_one_animation_db(skel, anim):

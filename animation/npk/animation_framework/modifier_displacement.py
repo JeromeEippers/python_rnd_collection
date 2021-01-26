@@ -1,7 +1,7 @@
 import numpy as np
-import posquat as pq
-import skeleton as sk
-from modifier import warp
+from . import posquat as pq
+from . import skeleton as sk
+from .modifier import warp
 
 
 def update_matrix_anim_projecting_disp_on_ground(anim):
@@ -24,6 +24,12 @@ def update_matrix_anim_projecting_disp_on_ground(anim):
     anim[:, 0, 0, :3] = x
     anim[:, 0, 1, :3] = y
     anim[:, 0, 2, :3] = eye[:, 0, 1, :3]
+
+
+def projecting_disp_on_ground(anim):
+    a = pq.pq_to_pose(anim)
+    update_matrix_anim_projecting_disp_on_ground(a)
+    return pq.pose_to_pq(a)
 
 
 def remove_positional_displacement(skel:sk.Skeleton, anim):
@@ -63,7 +69,7 @@ def set_displacement_origin(skel:sk.Skeleton, anim, disp):
 
 def reset_displacement_origin(skel:sk.Skeleton, anim):
     root = np.eye(4)
-    root[0, :3] = np.array([-1,0,0])
+    root[0, :3] = np.array([-1, 0, 0])
     root[1, :3] = np.array([0, 0, 1])
     root[2, :3] = np.array([0, 1, 0])
 
