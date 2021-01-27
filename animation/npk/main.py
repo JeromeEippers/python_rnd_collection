@@ -82,10 +82,28 @@ print("done")
 #animations = [a]
 #transitions = [is_transition]
 
-animations = IN.get_raw_db_animations(skeleton)
-motionmatching_db = MM.build_motion_db(animations, skeleton, stride=5)
+animations = IN.get_raw_db_animations()
+motionmatching_db = MM.build_motion_db(animations, skeleton, stride=8)
+
+anim_a = animations[0][0][:2,:,:], animations[0][1][:2,:,:]
+anim_b = animations[0][0][-2:,:,:], animations[0][1][-2:,:,:]
+debug_transition = {}
+transition = MM.create_motion_transition(motionmatching_db, skeleton, anim_a, anim_b, 80, debug_dict=debug_transition)
+
 
 # RENDERING ###############
+widget = fw.viewer.AnimationDictionaryWidget(
+        animation_dictionary={
+            '0': animations[0],
+            '1': anim_a,
+            '2': anim_b,
+            '3': transition,
+        },
+        widgets=[
+        ])
+#widget.set_current_animation('0')
+#widget.set_animation_dictionary(debug_transition)
+
 fw.run_main_window(widgets_addon=[
-    MM.db_debug_widget(motionmatching_db),
+    widget,
 ])

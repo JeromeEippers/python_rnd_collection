@@ -5,44 +5,78 @@ import numpy as np
 from animation_framework import modifier
 from animation_framework import posquat as pq
 
-
-from animation_framework.utilities import compute_bone_speed
+import animation_framework as fw
+from animation_framework.utilities import compute_bone_speed, is_foot_static
 from animation_framework import skeleton as sk
 from animation_framework import modifier_displacement as disp
+from animation_framework import fbxreader
 
 resource_dir = Path(__file__).parent.resolve() / 'resources'
 
 
-def get_raw_animation(name):
-    return pq.pose_to_pq(pickle.load(open(str(resource_dir / '{}.dump'.format(name)), 'rb')))
+def convert_fbx_animation(name, need_rotation=False):
+    skel = fw.get_skeleton()
+    reader = fbxreader.FbxReader(str(resource_dir / '{}.fbx'.format(name)))
+    animation = reader.animation_dictionary(skel)['Take 001']
+    if need_rotation:
+        animation = np.dot(animation, np.array([[1, 0, 0, 0], [0, 0, -1, 0], [0, 1, 0, 0], [0, 0, 0, 1]]))
+    disp.update_matrix_anim_projecting_disp_on_ground(animation)
+    x = pickle.dumps(animation)
+    with open(str(resource_dir / '{}.dump'.format(name)), 'wb') as f:
+        f.write(x)
 
 
-def get_raw_db_animations(skel:sk.Skeleton):
+def get_raw_animation(name, with_foot_phase=False):
+    animation = pq.pose_to_pq(pickle.load(open(str(resource_dir / '{}.dump'.format(name)), 'rb')))
+    if with_foot_phase:
+        skel = fw.get_skeleton()
+        lf = is_foot_static(animation[0][:, skel.leftfootid, :])
+        rf = is_foot_static(animation[0][:, skel.rightfootid, :])
+        return animation[0], animation[1], lf, rf
+    return animation
 
+
+def get_raw_db_animations(with_foot_phase=False):
+    skel = fw.get_skeleton()
     animations = []
 
     animation = get_raw_animation('on_spot')
     animation = modifier.lock_feet(skel, animation, 5, 10)
     ranges = [[33, 130], [465, 528], [558, 647], [790, 857], [892, 961], [1120, 1190], [1465, 1528]]
-    animations += [(animation[0][r[0]:r[1], ...], animation[1][r[0]:r[1], ...]) for r in ranges]
+    if with_foot_phase:
+        animations += [list([animation[i][r[0]:r[1], ...] for i in range(4)]) for r in ranges]
+    else:
+        animations += [list([animation[i][r[0]:r[1], ...] for i in range(2)]) for r in ranges]
 
 
     animation = get_raw_animation('side_steps')
     animation = modifier.lock_feet(skel, animation, 5, 10)
     ranges = [[185,256], [256,374], [374,463], [463,550], [550,636], [636,735],
               [735,816], [816,900], [900,990], [990,1080], [1080,1165], [1165,1260]]
-    animations += [(animation[0][r[0]-185:r[1]-185,...], animation[1][r[0]-185:r[1]-185,...]) for r in ranges]
+    if with_foot_phase:
+        animations += [list([animation[i][r[0]-185:r[1]-185, ...] for i in range(4)]) for r in ranges]
+    else:
+        animations += [list([animation[i][r[0]-185:r[1]-185, ...] for i in range(2)]) for r in ranges]
 
 
     animation = get_raw_animation('turn_steps')
     animation = modifier.lock_feet(skel, animation, 10, 5)
     ranges = [[184, 280], [280, 378], [375, 498], [490, 576], [576, 704], [704, 811], [811, 924], [920, 1026]]
-    animations += [(animation[0][r[0] - 184:r[1] - 184, ...], animation[1][r[0] - 184:r[1] - 184, ...]) for r in ranges]
+    if with_foot_phase:
+        animations += [list([animation[i][r[0]-184:r[1]-184, ...] for i in range(4)]) for r in ranges]
+    else:
+        animations += [list([animation[i][r[0]-184:r[1]-184, ...] for i in range(2)]) for r in ranges]
 
-    animations = [
-        disp.reset_displacement_origin(skel, anim) for anim in
-        animations
-    ]
+    if with_foot_phase:
+        animations = [
+            (*disp.reset_displacement_origin(skel, (p, q)), lf, rf) for p, q, lf, rf in
+            animations
+        ]
+    else:
+        animations = [
+            disp.reset_displacement_origin(skel, (p, q)) for p, q in
+            animations
+        ]
 
     return animations
 

@@ -39,7 +39,7 @@ def get_character_constructor_parameters():
     return g_vertices, g_indices, g_skinningindices, g_skinningweights, g_skeleton
 
 
-def get_skeleton():
+def get_skeleton() -> skeleton.Skeleton:
     return get_character_constructor_parameters()[4]
 
 
