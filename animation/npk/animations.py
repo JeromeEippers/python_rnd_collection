@@ -11,7 +11,27 @@ from animation_framework import skeleton as sk
 from animation_framework import modifier_displacement as disp
 from animation_framework import fbxreader
 
+import footphase_extraction as FPE
+
 resource_dir = Path(__file__).parent.resolve() / 'resources'
+
+
+class Animation(object):
+    def __init__(self, pq, features=None, lfphase=None, rfphase=None):
+        self.pq = pq
+        self.features = [] if features is None else features
+        self.lfphase = [] if lfphase is None else lfphase
+        self.rfphase = [] if rfphase is None else rfphase
+
+    def extract(self, start, end):
+        anim = Animation((self.pq[0][start:end, :, :], self.pq[1][start:end, :, :]))
+        if len(self.features) > 0:
+            anim.features = self.features[start:end]
+        if len(self.lfphase) > 0:
+            anim.lfphase = self.lfphase[start:end, ...]
+        if len(self.rfphase) > 0:
+            anim.rfphase = self.rfphase[start:end, ...]
+        return anim
 
 
 def convert_fbx_animation(name, need_rotation=False):
@@ -27,12 +47,30 @@ def convert_fbx_animation(name, need_rotation=False):
 
 
 def get_raw_animation(name, with_foot_phase=False):
-    animation = pq.pose_to_pq(pickle.load(open(str(resource_dir / '{}.dump'.format(name)), 'rb')))
+    anm = pq.pose_to_pq(pickle.load(open(str(resource_dir / '{}.dump'.format(name)), 'rb')))
+    animation = Animation(anm)
     if with_foot_phase:
-        skel = fw.get_skeleton()
-        lf = is_foot_static(animation[0][:, skel.leftfootid, :])
-        rf = is_foot_static(animation[0][:, skel.rightfootid, :])
-        return animation[0], animation[1], lf, rf
+        phase_path = resource_dir / '{}_phases.dump'.format(name)
+        if phase_path.exists():
+            lfphase, rfphase = pickle.load(open(phase_path, 'rb'))
+        else:
+            skel = fw.get_skeleton()
+
+            lfcontact = is_foot_static(anm[0][:, skel.leftfootid, :])
+            lffit = FPE.get_foot_phase_sinusoidal(lfcontact)
+            lfphase = np.zeros((len(lfcontact), 6), dtype=np.float)
+            lfphase[:, 0] = lfcontact
+            lfphase[:, 1:] = lffit
+
+            rfphase = []
+            x = pickle.dumps((lfphase, rfphase))
+
+            with open(str(resource_dir / '{}_phases.dump'.format(name)), 'wb') as f:
+                f.write(x)
+
+        animation.lfphase = lfphase
+        animation.rfphase = rfphase
+
     return animation
 
 
@@ -40,125 +78,28 @@ def get_raw_db_animations(with_foot_phase=False):
     skel = fw.get_skeleton()
     animations = []
 
-    animation = get_raw_animation('on_spot')
-    animation = modifier.lock_feet(skel, animation, 5, 10)
+    animation = get_raw_animation('on_spot', with_foot_phase=with_foot_phase)
+    animation.pq = modifier.lock_feet(skel, animation.pq, 5, 10)
     ranges = [[33, 130], [465, 528], [558, 647], [790, 857], [892, 961], [1120, 1190], [1465, 1528]]
-    if with_foot_phase:
-        animations += [list([animation[i][r[0]:r[1], ...] for i in range(4)]) for r in ranges]
-    else:
-        animations += [list([animation[i][r[0]:r[1], ...] for i in range(2)]) for r in ranges]
+    animations += [animation.extract(r[0], r[1]) for r in ranges]
 
-
-    animation = get_raw_animation('side_steps')
-    animation = modifier.lock_feet(skel, animation, 5, 10)
+    animation = get_raw_animation('side_steps', with_foot_phase=with_foot_phase)
+    animation.pq = modifier.lock_feet(skel, animation.pq, 5, 10)
     ranges = [[185,256], [256,374], [374,463], [463,550], [550,636], [636,735],
               [735,816], [816,900], [900,990], [990,1080], [1080,1165], [1165,1260]]
-    if with_foot_phase:
-        animations += [list([animation[i][r[0]-185:r[1]-185, ...] for i in range(4)]) for r in ranges]
-    else:
-        animations += [list([animation[i][r[0]-185:r[1]-185, ...] for i in range(2)]) for r in ranges]
+    animations += [animation.extract(r[0]-185, r[1]-185) for r in ranges]
 
-
-    animation = get_raw_animation('turn_steps')
-    animation = modifier.lock_feet(skel, animation, 10, 5)
+    animation = get_raw_animation('turn_steps', with_foot_phase=with_foot_phase)
+    animation.pq = modifier.lock_feet(skel, animation.pq, 10, 5)
     ranges = [[184, 280], [280, 378], [375, 498], [490, 576], [576, 704], [704, 811], [811, 924], [920, 1026]]
-    if with_foot_phase:
-        animations += [list([animation[i][r[0]-184:r[1]-184, ...] for i in range(4)]) for r in ranges]
-    else:
-        animations += [list([animation[i][r[0]-184:r[1]-184, ...] for i in range(2)]) for r in ranges]
+    animations += [animation.extract(r[0]-184, r[1]-184) for r in ranges]
 
-    if with_foot_phase:
-        animations = [
-            (*disp.reset_displacement_origin(skel, (p, q)), lf, rf) for p, q, lf, rf in
-            animations
-        ]
-    else:
-        animations = [
-            disp.reset_displacement_origin(skel, (p, q)) for p, q in
-            animations
-        ]
+    for anim in animations:
+        anim.pq = disp.reset_displacement_origin(skel, anim.pq)
 
     return animations
 
 
-
-def split_animation_by_foot_ground_contacts(skel : sk.Skeleton, anim, speedlimit=15):
-    # generate foot speed
-    leftfootspeed = compute_bone_speed(skel, anim, 'Model:LeftFoot')
-    rightfootspeed = compute_bone_speed(skel, anim, 'Model:RightFoot')
-
-    # splits
-    ranges = np.concatenate(np.argwhere((leftfootspeed <= speedlimit) & (rightfootspeed <= speedlimit)))
-    splits = []
-    currentbegin = ranges[0]
-    lastindex = ranges[0]
-    for r in ranges[1:]:
-        if r > lastindex + 1:
-            if lastindex - currentbegin > 10:
-                splits.append(int(currentbegin + (lastindex - currentbegin) / 2))
-            currentbegin = r
-        lastindex = r
-
-    ps, qs = anim
-    list_of_animations = []
-    for s in range(len(splits) - 1):
-        list_of_animations.append((
-            ps[splits[s]:splits[s + 1], ...],
-            qs[splits[s]:splits[s + 1], ...]
-        ))
-    list_of_animations.append((
-        ps[splits[-1]:, ...],
-        qs[splits[-1]:, ...]
-    ))
-    return list_of_animations
-
-
-def is_animation_valid(skel:sk.Skeleton, anim):
-    x = np.max(
-            np.linalg.norm(
-                anim[0][..., skel.boneid('Model:LeftFoot'), :] - anim[0][..., skel.boneid('Model:LeftUpLeg'), :],
-                axis=-1
-            )
-    )
-    if np.max(
-            np.linalg.norm(
-                anim[0][..., skel.boneid('Model:LeftFoot'), :] - anim[0][..., skel.boneid('Model:LeftUpLeg'), :],
-                axis=-1
-            )
-    ) > skel.leglength + skel.upleglength + 1:
-        return False
-    if np.max(
-            np.linalg.norm(
-                anim[0][..., skel.boneid('Model:RightFoot'), :] - anim[0][..., skel.boneid('Model:RightUpLeg'), :],
-                axis=-1
-            )
-    ) > skel.leglength + skel.upleglength + 1:
-        return False
-    if np.min(
-            np.linalg.norm(
-                anim[0][..., skel.boneid('Model:LeftFoot'),:] - anim[0][..., skel.boneid('Model:RightFoot'),:], axis=-1
-            )
-    ) < 10:
-        return False
-    if np.min(
-            np.linalg.norm(
-                anim[0][..., skel.boneid('Model:LeftFootToes'),:] - anim[0][..., skel.boneid('Model:RightFootToes'),:], axis=-1
-            )
-    ) < 15:
-        return False
-    if np.min(
-            np.linalg.norm(
-                anim[0][..., skel.boneid('Model:LeftFootToes'),:] - anim[0][..., skel.boneid('Model:RightFoot'),:], axis=-1
-            )
-    ) < 20:
-        return False
-    if np.min(
-            np.linalg.norm(
-                anim[0][..., skel.boneid('Model:LeftFoot'),:] - anim[0][..., skel.boneid('Model:RightFootToes'),:], axis=-1
-            )
-    ) < 20:
-        return False
-    return True
 
 
 def generate_augmentation(skel:sk.Skeleton, animations):
@@ -217,6 +158,7 @@ def generate_augmentation(skel:sk.Skeleton, animations):
 
     print('generate {} animations'.format(len(animations)))
     return animations
+
 
 def save_animation_database(animations):
     x = pickle.dumps(animations)

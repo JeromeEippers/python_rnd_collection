@@ -607,6 +607,22 @@ class PlotWidget(Widget):
             )
 
 
+class PlotHistogramWidget(PlotWidget):
+
+    def render(self, frame: float, frametime: float):
+        self.ctx.disable(moderngl.DEPTH_TEST)
+
+        # draw plot
+        for i in range(0, self.plot_len, 1):
+            self.plot_render.render(
+                i/(self.plot_len-1),
+                i/(self.plot_len-1),
+                self.y + (self.plots[i] - self.plots_min) / (self.plots_max - self.plots_min + 1e-8) * self.w,
+                self.y,
+                self.color
+            )
+
+
 class LineWidget(Widget):
     def __init__(self, color=np.array([0.0, 0.0, 0.0]), points=None, widgets=None):
         super().__init__(widgets=widgets)

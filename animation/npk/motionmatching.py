@@ -48,44 +48,6 @@ def build_motion_db(animations, skeleton: skl.Skeleton, stride=10):
     return stride, db
 
 
-class MotionMatchingFeatureDBDebug(fw.viewer.Widget):
-    '''
-    This is used as sub widget of MotionMatchingDBDebug !
-    '''
-    def __init__(self, widgets=None):
-        super().__init__(widgets=widgets)
-        self.line_widget = fw.viewer.LineWidget(color=np.array([1, 0, 0]))
-        self.widgets.append(self.line_widget)
-
-    def update_animation(self):
-        if self.parent.current_animation in self.parent.animation_dictionary:
-            features, frames = self.parent.animation_dictionary[self.parent.current_animation]
-
-            points = np.zeros((4 * len(features), 3))
-            for i in range(len(features)):
-                points[i * 4, :] = features[i, 0, :]
-                points[i * 4 + 1, :] = features[i, 1, :]
-                points[i * 4 + 2, :] = features[i, 0, :]
-                points[i * 4 + 3, :] = features[i, 2, :]
-            self.line_widget.set_points(points)
-
-
-class MotionMatchingDBDebug(fw.viewer.AnimationDictionaryWidget):
-    def animation(self, anim_name):
-        if anim_name in self.animation_dictionary:
-            return self.animation_dictionary[anim_name][1]
-        return []
-
-
-def db_debug_widget(db):
-    widget = MotionMatchingDBDebug(
-        animation_dictionary={str(i): anim for i, anim in enumerate(db[1])},
-        widgets=[
-            MotionMatchingFeatureDBDebug()
-        ])
-    widget.set_current_animation('0')
-    return widget
-
 
 def create_motion_transition(db, skeleton, anim_a, anim_b, transition_time, debug_dict=None):
     stride, db = db
