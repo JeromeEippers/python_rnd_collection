@@ -17,20 +17,26 @@ resource_dir = Path(__file__).parent.resolve() / 'resources'
 
 
 class Animation(object):
-    def __init__(self, pq, features=None, lfphase=None, rfphase=None):
+    def __init__(self, pq, name="", features=None, lfphase=None, rfphase=None):
         self.pq = pq
+        self.name = name
         self.features = [] if features is None else features
         self.lfphase = [] if lfphase is None else lfphase
         self.rfphase = [] if rfphase is None else rfphase
 
-    def extract(self, start, end):
-        anim = Animation((self.pq[0][start:end, :, :], self.pq[1][start:end, :, :]))
+    def __len__(self):
+        return len(self.pq[0])
+
+    def __getitem__(self, item):
+
+        anim = Animation((self.pq[0][item, :, :], self.pq[1][item, :, :]),
+                         '{}_{}'.format(self.name, item))
         if len(self.features) > 0:
-            anim.features = self.features[start:end]
+            anim.features = self.features[item]
         if len(self.lfphase) > 0:
-            anim.lfphase = self.lfphase[start:end, ...]
+            anim.lfphase = self.lfphase[item, ...]
         if len(self.rfphase) > 0:
-            anim.rfphase = self.rfphase[start:end, ...]
+            anim.rfphase = self.rfphase[item, ...]
         return anim
 
 
@@ -48,7 +54,7 @@ def convert_fbx_animation(name, need_rotation=False):
 
 def get_raw_animation(name, with_foot_phase=False):
     anm = pq.pose_to_pq(pickle.load(open(str(resource_dir / '{}.dump'.format(name)), 'rb')))
-    animation = Animation(anm)
+    animation = Animation(anm, name=name)
     if with_foot_phase:
         phase_path = resource_dir / '{}_phases.dump'.format(name)
         if phase_path.exists():
@@ -81,18 +87,18 @@ def get_raw_db_animations(with_foot_phase=False):
     animation = get_raw_animation('on_spot', with_foot_phase=with_foot_phase)
     animation.pq = modifier.lock_feet(skel, animation.pq, 5, 10)
     ranges = [[33, 130], [465, 528], [558, 647], [790, 857], [892, 961], [1120, 1190], [1465, 1528]]
-    animations += [animation.extract(r[0], r[1]) for r in ranges]
+    animations += [animation[r[0]: r[1]] for r in ranges]
 
     animation = get_raw_animation('side_steps', with_foot_phase=with_foot_phase)
     animation.pq = modifier.lock_feet(skel, animation.pq, 5, 10)
     ranges = [[185,256], [256,374], [374,463], [463,550], [550,636], [636,735],
               [735,816], [816,900], [900,990], [990,1080], [1080,1165], [1165,1260]]
-    animations += [animation.extract(r[0]-185, r[1]-185) for r in ranges]
+    animations += [animation[r[0]-185: r[1]-185] for r in ranges]
 
     animation = get_raw_animation('turn_steps', with_foot_phase=with_foot_phase)
     animation.pq = modifier.lock_feet(skel, animation.pq, 10, 5)
     ranges = [[184, 280], [280, 378], [375, 498], [490, 576], [576, 704], [704, 811], [811, 924], [920, 1026]]
-    animations += [animation.extract(r[0]-184, r[1]-184) for r in ranges]
+    animations += [animation[r[0]-184: r[1]-184] for r in ranges]
 
     for anim in animations:
         anim.pq = disp.reset_displacement_origin(skel, anim.pq)

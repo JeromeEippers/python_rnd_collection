@@ -22,14 +22,15 @@ class FootPhaseWidget(fw.viewer.Widget):
         if self.parent.current_animation in self.parent.animation_dictionary:
             animation = self.parent.animation_dictionary[self.parent.current_animation]
 
-            contacts = animation.lfphase[:, 1]
-            t = np.array(range(0, len(contacts)), dtype=np.float32)/30.0
-            self.left_contact.set_plots(contacts)
+            if len(animation.lfphase) > 0:
+                contacts = animation.lfphase[:, 1]
+                t = np.array(range(0, len(contacts)), dtype=np.float32)/30.0
+                self.left_contact.set_plots(contacts)
 
-            a, f, s, b = animation.lfphase[:, 2], animation.lfphase[:, 3], animation.lfphase[:, 4], animation.lfphase[:, 5]
-            self.left_sinus.set_plots(a * np.sin(f * t - s) + b)
+                a, f, s, b = animation.lfphase[:, 2], animation.lfphase[:, 3], animation.lfphase[:, 4], animation.lfphase[:, 5]
+                self.left_sinus.set_plots(a * np.sin(f * t - s) + b)
 
-            self.left_fit.set_plots((f * t - s) % (np.pi*2))
+                self.left_fit.set_plots((f * t - s) % (np.pi*2))
 
 
 class MotionMatchingFeatureDBDebug(fw.viewer.Widget):
@@ -66,24 +67,28 @@ class ExtendedAnimDictionaryWidget(fw.viewer.AnimationDictionaryWidget):
 
 
 def motionmatching_debug_widget(db):
-    stride, clips = db
 
     widget = ExtendedAnimDictionaryWidget(
-        animation_dictionary={str(i): anim for i, anim in enumerate(clips)},
+        animation_dictionary={'{}_{}'.format(i, anim.name): anim for i, anim in enumerate(db.clips)},
         widgets=[
             MotionMatchingFeatureDBDebug(),
             FootPhaseWidget()
         ])
-    widget.set_current_animation('0')
     return widget
 
 
 def animations_widget(animations):
     widget = ExtendedAnimDictionaryWidget(
-        animation_dictionary={str(i): anim for i, anim in enumerate(animations)},
+        animation_dictionary={'{}_{}'.format(i, anim.name): anim for i, anim in enumerate(animations)},
         widgets=[
             FootPhaseWidget()
         ])
-    widget.set_current_animation('0')
     return widget
 
+
+def animation_simple_widget(animations):
+    widget = ExtendedAnimDictionaryWidget(
+        animation_dictionary={'{}_{}'.format(i, anim.name): anim for i, anim in enumerate(animations)},
+        widgets=[
+        ])
+    return widget
