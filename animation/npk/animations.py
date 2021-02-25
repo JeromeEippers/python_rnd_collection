@@ -5,6 +5,8 @@ import numpy as np
 from animation_framework import modifier
 from animation_framework import posquat as pq
 
+from animation_framework import animation as AN
+
 import animation_framework as fw
 from animation_framework.utilities import compute_bone_speed, is_foot_static
 from animation_framework import skeleton as sk
@@ -15,29 +17,6 @@ import footphase_extraction as FPE
 
 resource_dir = Path(__file__).parent.resolve() / 'resources'
 
-
-class Animation(object):
-    def __init__(self, pq, name="", features=None, lfphase=None, rfphase=None):
-        self.pq = pq
-        self.name = name
-        self.features = [] if features is None else features
-        self.lfphase = [] if lfphase is None else lfphase
-        self.rfphase = [] if rfphase is None else rfphase
-
-    def __len__(self):
-        return len(self.pq[0])
-
-    def __getitem__(self, item):
-
-        anim = Animation((self.pq[0][item, :, :], self.pq[1][item, :, :]),
-                         '{}_{}'.format(self.name, item))
-        if len(self.features) > 0:
-            anim.features = self.features[item]
-        if len(self.lfphase) > 0:
-            anim.lfphase = self.lfphase[item, ...]
-        if len(self.rfphase) > 0:
-            anim.rfphase = self.rfphase[item, ...]
-        return anim
 
 
 def convert_fbx_animation(name, need_rotation=False):
@@ -54,29 +33,10 @@ def convert_fbx_animation(name, need_rotation=False):
 
 def get_raw_animation(name, with_foot_phase=False):
     anm = pq.pose_to_pq(pickle.load(open(str(resource_dir / '{}.dump'.format(name)), 'rb')))
-    animation = Animation(anm, name=name)
+    animation = AN.Animation(anm, name=name)
     if with_foot_phase:
-        phase_path = resource_dir / '{}_phases.dump'.format(name)
-        if phase_path.exists():
-            lfphase, rfphase = pickle.load(open(phase_path, 'rb'))
-        else:
-            skel = fw.get_skeleton()
-
-            lfcontact = is_foot_static(anm[0][:, skel.leftfootid, :])
-            lffit = FPE.get_foot_phase_sinusoidal(lfcontact)
-            lfphase = np.zeros((len(lfcontact), 6), dtype=np.float)
-            lfphase[:, 0] = lfcontact
-            lfphase[:, 1:] = lffit
-
-            rfphase = []
-            x = pickle.dumps((lfphase, rfphase))
-
-            with open(str(resource_dir / '{}_phases.dump'.format(name)), 'wb') as f:
-                f.write(x)
-
-        animation.lfphase = lfphase
-        animation.rfphase = rfphase
-
+        raise NotImplementedError()
+        # use the new attribute method to add this info
     return animation
 
 

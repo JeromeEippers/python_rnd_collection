@@ -22,15 +22,7 @@ class FootPhaseWidget(fw.viewer.Widget):
         if self.parent.current_animation in self.parent.animation_dictionary:
             animation = self.parent.animation_dictionary[self.parent.current_animation]
 
-            if len(animation.lfphase) > 0:
-                contacts = animation.lfphase[:, 1]
-                t = np.array(range(0, len(contacts)), dtype=np.float32)/30.0
-                self.left_contact.set_plots(contacts)
-
-                a, f, s, b = animation.lfphase[:, 2], animation.lfphase[:, 3], animation.lfphase[:, 4], animation.lfphase[:, 5]
-                self.left_sinus.set_plots(a * np.sin(f * t - s) + b)
-
-                self.left_fit.set_plots((f * t - s) % (np.pi*2))
+            # TODO use the attributes to get the data to plot
 
 
 class MotionMatchingFeatureDBDebug(fw.viewer.Widget):
@@ -45,30 +37,26 @@ class MotionMatchingFeatureDBDebug(fw.viewer.Widget):
     def update_animation(self):
         if self.parent.current_animation in self.parent.animation_dictionary:
             animation = self.parent.animation_dictionary[self.parent.current_animation]
-            features = animation.features
-            features_count = len(features)
-            if features_count > 0:
-                points = np.zeros((4 * features_count, 3))
-                for i in range(features_count):
-                    points[i * 4, :] = features[i, 0, :]
-                    points[i * 4 + 1, :] = features[i, 1, :]
-                    points[i * 4 + 2, :] = features[i, 0, :]
-                    points[i * 4 + 3, :] = features[i, 2, :]
-                self.line_widget.set_points(points)
-            else:
-                self.line_widget.set_points([])
+            features = animation.attribute('mm_features')
+            self.line_widget.set_points([])
 
+            if features is not None:
+                features = features.data
+                features_count = len(features)
+                if features_count > 0:
+                    points = np.zeros((4 * features_count, 3))
+                    for i in range(features_count):
+                        points[i * 4, :] = features[i, 0, :]
+                        points[i * 4 + 1, :] = features[i, 1, :]
+                        points[i * 4 + 2, :] = features[i, 0, :]
+                        points[i * 4 + 3, :] = features[i, 2, :]
+                    self.line_widget.set_points(points)
 
-class ExtendedAnimDictionaryWidget(fw.viewer.AnimationDictionaryWidget):
-    def animation(self, anim_name):
-        if anim_name in self.animation_dictionary:
-            return self.animation_dictionary[anim_name].pq
-        return []
 
 
 def motionmatching_debug_widget(db):
 
-    widget = ExtendedAnimDictionaryWidget(
+    widget = fw.viewer.AnimationDictionaryWidget(
         animation_dictionary={'{}_{}'.format(i, anim.name): anim for i, anim in enumerate(db.clips)},
         widgets=[
             MotionMatchingFeatureDBDebug(),
@@ -78,16 +66,17 @@ def motionmatching_debug_widget(db):
 
 
 def animations_widget(animations):
-    widget = ExtendedAnimDictionaryWidget(
+    widget = fw.viewer.AnimationDictionaryWidget(
         animation_dictionary={'{}_{}'.format(i, anim.name): anim for i, anim in enumerate(animations)},
         widgets=[
-            FootPhaseWidget()
+            MotionMatchingFeatureDBDebug(),
+            #FootPhaseWidget()
         ])
     return widget
 
 
 def animation_simple_widget(animations):
-    widget = ExtendedAnimDictionaryWidget(
+    widget = fw.viewer.AnimationDictionaryWidget(
         animation_dictionary={'{}_{}'.format(i, anim.name): anim for i, anim in enumerate(animations)},
         widgets=[
         ])

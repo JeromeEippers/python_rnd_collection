@@ -1,10 +1,10 @@
 import numpy as np
 
-import animations
 
 import animation_framework as fw
 from animation_framework import modifier
 from animation_framework import posquat as pq
+from animation_framework import animation as AN
 from animation_framework import utilities as tr
 from animation_framework import modifier_displacement as disp
 from animation_framework import skeleton as skl
@@ -24,12 +24,13 @@ def build_motion_db(animations, skeleton: skl.Skeleton, stride=10):
 
     def _build_motion(animation):
         animation_len = len(animation)
-        for r in range(0, animation_len-stride+1, stride):
+        last_clip = None
+        for r in range(0, animation_len-stride-2, stride):
             anim = animation[r:]
             anim.pq = disp.reset_displacement_origin(skeleton, anim.pq)
 
             anim_len = len(anim)
-            features_keys = list(range(0, anim_len-stride+1, stride))
+            features_keys = list(range(0, anim_len-stride, stride))
 
             hipspos = anim.pq[0][:, skeleton.hipsid, :]
             lfpos = anim.pq[0][:, skeleton.leftfootid, :]
@@ -38,7 +39,7 @@ def build_motion_db(animations, skeleton: skl.Skeleton, stride=10):
             lfvec = tr.compute_vector(lfpos)
             rfvec = tr.compute_vector(rfpos)
 
-            #frames = anim[0][:stride], anim[1][:stride]
+            frames = anim.pq[0][:stride+1], anim.pq[1][:stride+1]
             features = np.zeros((len(features_keys), 6, 3))
             features[:, 0, :] = hipspos[features_keys, :]
             features[:, 1, :] = lfpos[features_keys, :]
@@ -47,7 +48,14 @@ def build_motion_db(animations, skeleton: skl.Skeleton, stride=10):
             features[:, 4, :] = lfvec[features_keys, :]
             features[:, 5, :] = rfvec[features_keys, :]
 
-            db.clips.append((features, anim))
+            #create the animation of this clip
+            clip = AN.Animation(frames, anim.name)
+            clip.attributes.append(AN.Attribute(features, 'mm_features', False))
+            if last_clip is not None:
+                last_clip.attributes.append(AN.Attribute([clip], 'mm_next', False))
+
+            last_clip = clip
+            db.clips.append(clip)
 
     for animation in animations:
         _build_motion(animation)
@@ -57,57 +65,55 @@ def build_motion_db(animations, skeleton: skl.Skeleton, stride=10):
 
 def compute_score(feature, query):
     vec = feature - query
-    dist = np.sum(vec * vec)
-    return dist
+    dist = np.sum(vec * vec, axis=1) * np.array([2, 1, 1, 4, 6, 6])
+    return np.sum(dist)
 
 
 def find_segment(a, b, t, db, skeleton, debug_dict=None):
 
-    root = np.eye(4)
-    rp, rq = np.zeros((2, 3)), np.zeros((2, 4))
-    root[0, :3] = np.array([-1, 0, 0])
-    root[1, :3] = np.array([0, 0, 1])
-    root[2, :3] = np.array([0, 1, 0])
-    rp[0, :], rq[0, :] = pq.pose_to_pq(root)
-    rp[1, :], rq[1, :] = rp[0, :], rq[0, :]
+    # create a temp animation with a end b
+    pos, quat = np.zeros((4, len(skeleton.bindpose), 3)), np.zeros((4, len(skeleton.bindpose), 4))
+    pos[:2, :, :], quat[:2, :, :] = a[0][-2:, :, :], a[1][-2:, :, :]
+    pos[2:, :, :], quat[2:, :, :] = b[0][:2, :, :], b[1][:2, :, :]
 
-    # set animations in local space relative to end of a
-    ip, iq = np.zeros((2, 3)), np.zeros((2, 4))
-    ip[0, :], iq[0, :] = pq.inv(None, a[0][-1, 0, :], a[1][-1, 0, :])
-    ip[1, :], iq[1, :] = ip[0, :], iq[0, :]
-    a = skeleton.global_to_local(a, (ip, iq))
-    a = skeleton.local_to_global(a, (rp, rq))
-    b = skeleton.global_to_local(b, (ip, iq))
-    b = skeleton.local_to_global(b, (rp, rq))
+    # set in local space
+    pos, quat = disp.reset_displacement_origin(skeleton, (pos, quat))
+
+    hipspos = pos[:, skeleton.hipsid, :]
+    lfpos = pos[:, skeleton.leftfootid, :]
+    rfpos = pos[:, skeleton.rightfootid, :]
+    hipsvec = tr.compute_vector(hipspos)
+    lfvec = tr.compute_vector(lfpos)
+    rfvec = tr.compute_vector(rfpos)
 
     if debug_dict != None:
         debug_dict['segment_a_{}'.format(t)] = a
         debug_dict['segment_b_{}'.format(t)] = b
+        debug_dict['local_{}'.format(t)] = (pos, quat)
 
     a_query = np.zeros((6, 3))
-    a_query[0, :] = a[0][-1, skeleton.hipsid, :]
-    a_query[1, :] = a[0][-1, skeleton.leftfootid, :]
-    a_query[2, :] = a[0][-1, skeleton.rightfootid, :]
-    a_query[3, :] = tr.compute_vector(a[0][:, skeleton.hipsid, :])[-1, :]
-    a_query[4, :] = tr.compute_vector(a[0][:, skeleton.leftfootid, :])[-1, :]
-    a_query[5, :] = tr.compute_vector(a[0][:, skeleton.rightfootid, :])[-1, :]
+    a_query[0, :] = hipspos[1, :]
+    a_query[1, :] = lfpos[1, :]
+    a_query[2, :] = rfpos[1, :]
+    a_query[3, :] = hipsvec[0, :]
+    a_query[4, :] = lfvec[0, :]
+    a_query[5, :] = rfvec[0, :]
 
     b_query = np.zeros((6, 3))
-    b_query[0, :] = b[0][0, skeleton.hipsid, :]
-    b_query[1, :] = b[0][0, skeleton.leftfootid, :]
-    b_query[2, :] = b[0][0, skeleton.rightfootid, :]
-    b_query[3, :] = tr.compute_vector(b[0][:, skeleton.hipsid, :])[0, :]
-    b_query[4, :] = tr.compute_vector(b[0][:, skeleton.leftfootid, :])[0, :]
-    b_query[5, :] = tr.compute_vector(b[0][:, skeleton.rightfootid, :])[0, :]
+    b_query[0, :] = hipspos[-2, :]
+    b_query[1, :] = lfpos[-2, :]
+    b_query[2, :] = rfpos[-2, :]
+    b_query[3, :] = hipsvec[-1, :]
+    b_query[4, :] = lfvec[-1, :]
+    b_query[5, :] = rfvec[-1, :]
 
     # check all the clips for matching features
     features_index = int(t / db.stride)
     best_score = 1e8
-    best_frames = None
-    best_clip = -1
+    best_clip = None
     best_feature = -1
-    for iclip, clip in enumerate(db.clips):
-        features, frames = clip
+    for clip in db.clips:
+        features = clip.attribute('mm_features').data
         features_count = len(features)
 
         # initial state score
@@ -122,15 +128,13 @@ def find_segment(a, b, t, db, skeleton, debug_dict=None):
                     feature_score * FEATURE_SCORE
             if best_score > score:
                 best_score = score
-                best_frames = frames
-                best_clip = iclip
+                best_clip = clip
                 best_feature = f
 
     if debug_dict != None:
-        debug_dict['frames_{}'.format(t)] = best_frames
+        debug_dict['frames_{}'.format(t)] = best_clip
 
-    print(best_score, best_clip, best_feature)
-    return best_frames, best_score
+    return best_clip, best_score
 
 
 def create_motion_transition(db, skeleton, anim_a, anim_b, transition_time, debug_dict=None):
@@ -168,14 +172,16 @@ def create_motion_transition(db, skeleton, anim_a, anim_b, transition_time, debu
 
         transition_len += db.stride
         t -= db.stride
-        lastp, lastq = last_segment.pq[0][db.stride-2:db.stride, :, :], last_segment.pq[1][db.stride-2:db.stride, :, :]
+        lastp, lastq = last_segment.pq[0][-2:, :, :], last_segment.pq[1][-2:, :, :]
 
-        last_segment = last_segment[db.stride:]
-        if len(last_segment) < db.stride:
+        next_clip = last_segment.attribute('mm_next')
+        if next_clip is None:
             last_segment = None
             best_score = 1e8
+        else:
+            last_segment = next_clip.data[0]
 
-    return animations.Animation((p[:transition_len:, :, :], q[:transition_len:, :, :]), name='transition')
+    return AN.Animation((p[:transition_len:, :, :], q[:transition_len:, :, :]), name='transition')
 
 
 def create_segment_transition(db, skeleton, anim_a, anim_b, transition_time, debug_dict=None):
@@ -198,8 +204,20 @@ def create_segment_transition(db, skeleton, anim_a, anim_b, transition_time, deb
     endp, endq = anim_b.pq[0][:2, :, :], anim_b.pq[1][:2, :, :]
 
     segment, score = find_segment((lastp, lastq), (endp, endq), transition_time, db, skeleton, debug_dict)
-    segment.pq = disp.set_displacement_origin(skeleton, segment.pq, (lastp[-1, 0, :], lastq[-1, 0, :]))
+    while True:
+        segment.pq = disp.set_displacement_origin(skeleton, segment.pq, (lastp[-1, 0, :], lastq[-1, 0, :]))
 
-    return segment
+        p[transition_len: transition_len + db.stride, :, :] = segment.pq[0][:db.stride]
+        q[transition_len: transition_len + db.stride, :, :] = segment.pq[1][:db.stride]
+
+        lastp, lastq = segment.pq[0][-2:, :, :], segment.pq[1][-2:, :, :]
+
+        next_clip = segment.attribute('mm_next')
+        if next_clip is None:
+            break
+        segment = next_clip.data[0]
+        transition_len += db.stride
+
+    return AN.Animation((p[:transition_len:, :, :], q[:transition_len:, :, :]), name='transition')
 
 

@@ -85,15 +85,20 @@ print("done")
 
 animations = IN.get_raw_db_animations(with_foot_phase=False)
 #animations = [IN.get_raw_animation('side_steps', with_foot_phase=False)]
-motionmatching_db = MM.build_motion_db(animations, skeleton, stride=8)
+motionmatching_db = MM.build_motion_db(animations, skeleton, stride=10)
 
 anim_a = animations[0][:2]
-anim_b = animations[4][-2:]
+anim_b = animations[5][-2:]
 debug_transition = {}
 transition = MM.create_motion_transition(motionmatching_db, skeleton, anim_a, anim_b, 80, debug_dict=debug_transition)
 
 
 # RENDERING ###############
 fw.run_main_window(widgets_addon=[
-    V.animation_simple_widget([anim_a, anim_b, transition]),
+    V.animations_widget([
+        transition,
+        motionmatching_db.clips[0],
+        anim_a,
+        anim_b,
+        ]),
 ])

@@ -442,7 +442,7 @@ class AnimationDictionaryWidget(Widget):
 
     def animation(self, anim_name):
         if anim_name in self.animation_dictionary:
-            return self.animation_dictionary[anim_name]
+            return self.animation_dictionary[anim_name].pq
         return []
 
     def set_current_animation(self, anim_name):
