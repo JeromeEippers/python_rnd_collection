@@ -1,5 +1,4 @@
 import numpy as np
-import copy
 from . import posquat as pq
 from . import utilities as ut
 
@@ -80,7 +79,6 @@ class Skeleton(object):
         if self.localinitialpq != None:
             pos[..., 2:, :] = self.localinitialpq[0][2:, :]
 
-
         return pos, pq.vec_normalize(quat)
 
     def foot_ik(self, hips, leftfoot, rightfoot, globalpose=None):
@@ -100,7 +98,6 @@ class Skeleton(object):
 
         gpos, gquat = globalpose
         lpos, lquat = localpose
-
 
         def _compute_error_length(start_pos, end_pos):
             middle = end_pos - start_pos
@@ -130,8 +127,6 @@ class Skeleton(object):
                 _solve_hips(ghips, hips_distance)
                 _solve_one_leg(ghips, localrightupleg, grightfoot)
                 _solve_hips(ghips, hips_distance)
-
-
 
         def _compute_leg(start_pos, end_pos, pole_dir):
             middle = ((end_pos - start_pos)/(self.upleglength + self.leglength)) * self.upleglength
